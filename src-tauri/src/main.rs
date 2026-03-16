@@ -8,23 +8,15 @@ pub mod search;
 pub mod commands;
 
 fn main() {
-    // Read API key from environment variable if available
-    let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
+    // Use the app's local data directory for storing vectors
+    let data_dir = dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("sensedesk");
 
-    // Initialize the vector store (connects to local Qdrant)
-    let vector_store = crate::store::vector::VectorStore::new()
-        .expect("Failed to connect to Qdrant. Is it running on localhost:6334?");
+    let app_state = commands::AppState::new(data_dir);
 
     tauri::Builder::default()
-        .manage(commands::AppState {
-             api_key: std::sync::Arc::new(tokio::sync::Mutex::new(api_key)),
-             http_client: reqwest::Client::new(),
-             vector_store: std::sync::Arc::new(vector_store),
-             files_done: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
-             files_total: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0)),
-             status: std::sync::Arc::new(tokio::sync::Mutex::new("idle".to_string())),
-             indexed_files: std::sync::Arc::new(tokio::sync::Mutex::new(Vec::new())),
-        })
+        .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::set_api_key,
             commands::start_indexing,

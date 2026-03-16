@@ -3,19 +3,40 @@ use reqwest::{Client, StatusCode};
 use std::time::Duration;
 use tokio::time::sleep;
 
-use super::types::{BatchEmbedRequest, BatchEmbedResponse, EmbedRequest, Content, Part};
+use super::types::{BatchEmbedRequest, BatchEmbedResponse, EmbedRequest, Content, Part, InlineData};
 
 const GEMINI_MODEL: &str = "models/gemini-embedding-2-preview";
 const GEMINI_EMBED_URL: &str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:batchEmbedContents";
 const EMBED_DIMENSION: u32 = 768;
 
 /// Build an EmbedRequest for a text chunk (used during indexing)
-pub fn make_document_request(text: &str) -> EmbedRequest {
+pub fn make_text_request(text: &str) -> EmbedRequest {
     EmbedRequest {
         model: GEMINI_MODEL.to_string(),
         content: Content {
-            role: "user".to_string(),
-            parts: vec![Part { text: text.to_string() }],
+            parts: vec![Part {
+                text: Some(text.to_string()),
+                inline_data: None,
+            }],
+        },
+        task_type: "RETRIEVAL_DOCUMENT".to_string(),
+        output_dimensionality: EMBED_DIMENSION,
+        title: None,
+    }
+}
+
+/// Build an EmbedRequest for a binary file (PDF, image, etc.)
+pub fn make_binary_request(base64_data: &str, mime_type: &str) -> EmbedRequest {
+    EmbedRequest {
+        model: GEMINI_MODEL.to_string(),
+        content: Content {
+            parts: vec![Part {
+                text: None,
+                inline_data: Some(InlineData {
+                    mime_type: mime_type.to_string(),
+                    data: base64_data.to_string(),
+                }),
+            }],
         },
         task_type: "RETRIEVAL_DOCUMENT".to_string(),
         output_dimensionality: EMBED_DIMENSION,
@@ -28,8 +49,10 @@ pub fn make_query_request(query: &str) -> EmbedRequest {
     EmbedRequest {
         model: GEMINI_MODEL.to_string(),
         content: Content {
-            role: "user".to_string(),
-            parts: vec![Part { text: query.to_string() }],
+            parts: vec![Part {
+                text: Some(query.to_string()),
+                inline_data: None,
+            }],
         },
         task_type: "RETRIEVAL_QUERY".to_string(),
         output_dimensionality: EMBED_DIMENSION,
@@ -37,7 +60,7 @@ pub fn make_query_request(query: &str) -> EmbedRequest {
     }
 }
 
-/// Batch embed multiple text chunks. Returns one Vec<f32> per input request.
+/// Batch embed multiple requests. Returns one Vec<f32> per input request.
 pub async fn batch_embed(
     client: &Client,
     api_key: &str,
@@ -81,7 +104,7 @@ pub async fn batch_embed(
     }
 }
 
-/// Embed a single text string (convenience wrapper for search queries)
+/// Embed a single text query (convenience wrapper)
 pub async fn embed_query(client: &Client, api_key: &str, query: &str) -> Result<Vec<f32>> {
     let req = make_query_request(query);
     let mut results = batch_embed(client, api_key, vec![req]).await?;

@@ -3,15 +3,23 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Content {
-    pub role: String,
     pub parts: Vec<Part>,
 }
 
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Part {
-    pub text: String,
-    // Note: Future revisions could use inline_data struct for images/video
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inline_data: Option<InlineData>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct InlineData {
+    pub mime_type: String,
+    pub data: String, // base64-encoded
 }
 
 #[derive(Serialize, Debug, Clone)]

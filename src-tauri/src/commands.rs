@@ -6,6 +6,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::path::PathBuf;
 
+/// API key baked in at compile time. Set SENSEDESK_API_KEY env var when building.
+/// Falls back to empty string if not set (user can enter it via Settings UI at runtime).
+const BUNDLED_API_KEY: Option<&str> = option_env!("SENSEDESK_API_KEY");
+
 pub struct AppState {
     pub api_key: Arc<tokio::sync::Mutex<String>>,
     pub http_client: reqwest::Client,
@@ -14,6 +18,29 @@ pub struct AppState {
     pub files_total: Arc<AtomicU32>,
     pub status: Arc<tokio::sync::Mutex<String>>,
     pub indexed_files: Arc<tokio::sync::Mutex<Vec<PathBuf>>>,
+}
+
+impl AppState {
+    pub fn new(data_dir: PathBuf) -> Self {
+        let api_key = BUNDLED_API_KEY
+            .map(|k| k.to_string())
+            .or_else(|| std::env::var("GEMINI_API_KEY").ok())
+            .unwrap_or_default();
+
+        let vector_dir = data_dir.join("vectors");
+        let vector_store = crate::store::vector::VectorStore::new(vector_dir)
+            .expect("Failed to initialize vector store");
+
+        Self {
+            api_key: Arc::new(tokio::sync::Mutex::new(api_key)),
+            http_client: reqwest::Client::new(),
+            vector_store: Arc::new(vector_store),
+            files_done: Arc::new(AtomicU32::new(0)),
+            files_total: Arc::new(AtomicU32::new(0)),
+            status: Arc::new(tokio::sync::Mutex::new("idle".to_string())),
+            indexed_files: Arc::new(tokio::sync::Mutex::new(Vec::new())),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -26,7 +53,18 @@ pub struct IndexerStatus {
 
 const CHUNK_TOKENS: usize = 512;
 const CHUNK_OVERLAP: usize = 64;
-const EMBED_BATCH_SIZE: usize = 20; // Gemini batchEmbedContents limit
+const EMBED_BATCH_SIZE: usize = 20;
+
+// Map file extension to MIME type for native Gemini multimodal embedding
+fn mime_for_ext(ext: &str) -> Option<&'static str> {
+    match ext {
+        "pdf" => Some("application/pdf"),
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "webp" => Some("image/webp"),
+        _ => None,
+    }
+}
 
 #[tauri::command]
 pub async fn set_api_key(key: String, state: State<'_, AppState>) -> Result<(), String> {
@@ -52,7 +90,6 @@ pub async fn start_indexing(folders: Vec<String>, state: State<'_, AppState>) ->
         }
     }
 
-    // Set status
     *state.status.lock().await = "running".to_string();
 
     let files_done = state.files_done.clone();
@@ -63,9 +100,8 @@ pub async fn start_indexing(folders: Vec<String>, state: State<'_, AppState>) ->
     let http_client = state.http_client.clone();
     let api_key_arc = state.api_key.clone();
 
-    // Ensure Qdrant collection exists (recreate for fresh index)
-    vector_store.delete_collection().await.map_err(|e| e.to_string())?;
-    vector_store.ensure_collection().await.map_err(|e| e.to_string())?;
+    // Clear previous index for a fresh start
+    vector_store.clear().await.map_err(|e| e.to_string())?;
 
     tokio::spawn(async move {
         let all_files: Vec<PathBuf> = crate::indexer::crawler::crawl(&paths).collect();
@@ -84,76 +120,113 @@ pub async fn start_indexing(folders: Vec<String>, state: State<'_, AppState>) ->
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
 
-            // 1. Extract text content
-            let text = match crate::indexer::extractor::extract_content(&file_path) {
-                Ok(t) => t,
-                Err(_) => {
-                    files_done.store((i + 1) as u32, Ordering::SeqCst);
-                    continue;
-                }
-            };
-
-            if text.trim().is_empty() {
-                files_done.store((i + 1) as u32, Ordering::SeqCst);
-                continue;
-            }
-
-            // 2. Chunk text
-            let chunks = crate::indexer::chunker::chunk_text(&text, CHUNK_TOKENS, CHUNK_OVERLAP);
-            if chunks.is_empty() {
-                files_done.store((i + 1) as u32, Ordering::SeqCst);
-                continue;
-            }
-
-            // 3. Embed chunks in batches via Gemini API
+            let ext = file_path.extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
             let api_key = api_key_arc.lock().await.clone();
-            
-            for batch in chunks.chunks(EMBED_BATCH_SIZE) {
-                let embed_requests: Vec<crate::embedding::types::EmbedRequest> = batch
-                    .iter()
-                    .map(|chunk| crate::embedding::client::make_document_request(chunk))
-                    .collect();
 
-                let embeddings = match crate::embedding::client::batch_embed(
-                    &http_client,
-                    &api_key,
-                    embed_requests,
-                ).await {
-                    Ok(e) => e,
-                    Err(err) => {
-                        eprintln!("Embedding error for {:?}: {}", file_path, err);
+            // Check if this file type can be natively embedded by Gemini (PDF, images)
+            if let Some(mime) = mime_for_ext(&ext) {
+                // Read binary and send directly to Gemini Embedding 2
+                let bytes = match std::fs::read(&file_path) {
+                    Ok(b) => b,
+                    Err(_) => {
+                        files_done.store((i + 1) as u32, Ordering::SeqCst);
                         continue;
                     }
                 };
 
-                // 4. Build Qdrant points with metadata
-                let mut points = Vec::new();
-                for (j, embedding) in embeddings.into_iter().enumerate() {
-                    let chunk_text = batch.get(j).cloned().unwrap_or_default();
-                    let payload: std::collections::HashMap<String, qdrant_client::qdrant::Value> = [
-                        ("path".to_string(), qdrant_client::qdrant::Value {
-                            kind: Some(qdrant_client::qdrant::value::Kind::StringValue(
-                                file_path.display().to_string()
-                            )),
-                        }),
-                        ("file_type".to_string(), qdrant_client::qdrant::Value {
-                            kind: Some(qdrant_client::qdrant::value::Kind::StringValue(
-                                file_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string()
-                            )),
-                        }),
-                        ("chunk_text".to_string(), qdrant_client::qdrant::Value {
-                            kind: Some(qdrant_client::qdrant::value::Kind::StringValue(
-                                chunk_text.chars().take(500).collect()
-                            )),
-                        }),
-                    ].into();
-
-                    points.push(PointStruct::new(point_id, embedding, payload));
-                    point_id += 1;
+                // Skip very large files (>10MB) to avoid API limits
+                if bytes.len() > 10 * 1024 * 1024 {
+                    files_done.store((i + 1) as u32, Ordering::SeqCst);
+                    continue;
                 }
 
-                if let Err(e) = vector_store.upsert_points(points).await {
-                    eprintln!("Qdrant upsert error: {}", e);
+                let b64 = base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    &bytes,
+                );
+
+                let req = crate::embedding::client::make_binary_request(&b64, mime);
+                match crate::embedding::client::batch_embed(&http_client, &api_key, vec![req]).await {
+                    Ok(embeddings) => {
+                        if let Some(embedding) = embeddings.into_iter().next() {
+                            let mut payload = std::collections::HashMap::new();
+                            payload.insert("path".to_string(), file_path.display().to_string());
+                            payload.insert("file_type".to_string(), ext.clone());
+                            payload.insert("chunk_text".to_string(), 
+                                format!("[{} file: {}]", ext.to_uppercase(), 
+                                    file_path.file_name().unwrap_or_default().to_string_lossy()));
+
+                            let point = crate::store::vector::StoredPoint {
+                                id: point_id,
+                                vector: embedding,
+                                payload,
+                            };
+                            point_id += 1;
+                            if let Err(e) = vector_store.upsert(vec![point]).await {
+                                eprintln!("Vector store error: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("Embed error for {:?}: {}", file_path, e),
+                }
+            } else {
+                // Text-based files: extract → chunk → embed
+                let text = match crate::indexer::extractor::extract_content(&file_path) {
+                    Ok(t) => t,
+                    Err(_) => {
+                        files_done.store((i + 1) as u32, Ordering::SeqCst);
+                        continue;
+                    }
+                };
+
+                if text.trim().is_empty() {
+                    files_done.store((i + 1) as u32, Ordering::SeqCst);
+                    continue;
+                }
+
+                let chunks = crate::indexer::chunker::chunk_text(&text, CHUNK_TOKENS, CHUNK_OVERLAP);
+                if chunks.is_empty() {
+                    files_done.store((i + 1) as u32, Ordering::SeqCst);
+                    continue;
+                }
+
+                for batch in chunks.chunks(EMBED_BATCH_SIZE) {
+                    let embed_requests: Vec<_> = batch.iter()
+                        .map(|chunk| crate::embedding::client::make_text_request(chunk))
+                        .collect();
+
+                    let embeddings = match crate::embedding::client::batch_embed(
+                        &http_client, &api_key, embed_requests,
+                    ).await {
+                        Ok(e) => e,
+                        Err(err) => {
+                            eprintln!("Embed error for {:?}: {}", file_path, err);
+                            continue;
+                        }
+                    };
+
+                    let mut points = Vec::new();
+                    for (j, embedding) in embeddings.into_iter().enumerate() {
+                        let chunk_text = batch.get(j).cloned().unwrap_or_default();
+                        let mut payload = std::collections::HashMap::new();
+                        payload.insert("path".to_string(), file_path.display().to_string());
+                        payload.insert("file_type".to_string(), ext.clone());
+                        payload.insert("chunk_text".to_string(), chunk_text.chars().take(500).collect());
+
+                        points.push(crate::store::vector::StoredPoint {
+                            id: point_id,
+                            vector: embedding,
+                            payload,
+                        });
+                        point_id += 1;
+                    }
+
+                    if let Err(e) = vector_store.upsert(points).await {
+                        eprintln!("Vector store error: {}", e);
+                    }
                 }
             }
 
@@ -208,57 +281,30 @@ pub async fn search(
 
     // 1. Embed the query via Gemini
     let query_vector = crate::embedding::client::embed_query(
-        &state.http_client,
-        &api_key,
-        &query,
+        &state.http_client, &api_key, &query,
     ).await.map_err(|e| format!("Failed to embed query: {}", e))?;
 
-    // 2. Search Qdrant for nearest neighbors
+    // 2. Search local vector store
     let scored_points = state.vector_store
         .search(query_vector, 20)
         .await
-        .map_err(|e| format!("Qdrant search failed: {}", e))?;
+        .map_err(|e| format!("Search failed: {}", e))?;
 
-    // 3. Transform scored points into SearchResult structs
-    let mut results: Vec<crate::search::SearchResult> = Vec::new();
-    for (rank, point) in scored_points.into_iter().enumerate() {
-        let payload = &point.payload;
-
-        let path = payload.get("path")
-            .and_then(|v| v.kind.as_ref())
-            .map(|k| match k {
-                qdrant_client::qdrant::value::Kind::StringValue(s) => s.clone(),
-                _ => String::new(),
-            })
-            .unwrap_or_default();
-
-        let file_type = payload.get("file_type")
-            .and_then(|v| v.kind.as_ref())
-            .map(|k| match k {
-                qdrant_client::qdrant::value::Kind::StringValue(s) => s.clone(),
-                _ => String::new(),
-            })
-            .unwrap_or_default();
-
-        let chunk_text = payload.get("chunk_text")
-            .and_then(|v| v.kind.as_ref())
-            .map(|k| match k {
-                qdrant_client::qdrant::value::Kind::StringValue(s) => s.clone(),
-                _ => String::new(),
-            })
-            .unwrap_or_default();
-
-        results.push(crate::search::SearchResult {
-            chunk_id: format!("chk-{}", point.id.as_ref().map(|id| format!("{:?}", id)).unwrap_or_default()),
-            file_id: path.clone(),
-            path,
-            file_type,
-            text_excerpt: Some(chunk_text),
-            thumbnail_path: None,
-            score: point.score,
-            rank: rank + 1,
-        });
-    }
+    // 3. Transform into SearchResults
+    let results: Vec<crate::search::SearchResult> = scored_points.into_iter().enumerate()
+        .map(|(rank, point)| {
+            crate::search::SearchResult {
+                chunk_id: format!("chk-{}", point.id),
+                file_id: point.payload.get("path").cloned().unwrap_or_default(),
+                path: point.payload.get("path").cloned().unwrap_or_default(),
+                file_type: point.payload.get("file_type").cloned().unwrap_or_default(),
+                text_excerpt: point.payload.get("chunk_text").cloned(),
+                thumbnail_path: None,
+                score: point.score,
+                rank: rank + 1,
+            }
+        })
+        .collect();
 
     Ok(results)
 }
@@ -282,7 +328,6 @@ pub fn open_file(path: String) -> Result<(), String> {
 pub fn reveal_in_explorer(_path: String) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
-        // xdg-open on the parent directory
         if let Some(parent) = std::path::Path::new(&_path).parent() {
             Command::new("xdg-open").arg(parent).spawn().map_err(|e| e.to_string())?;
         }
@@ -296,5 +341,3 @@ pub fn reveal_in_explorer(_path: String) -> Result<(), String> {
     
     Ok(())
 }
-
-use qdrant_client::qdrant::PointStruct;

@@ -1,76 +1,111 @@
 use anyhow::{Context, Result};
-use qdrant_client::{
-    Qdrant,
-    qdrant::{
-        vectors_config::Config, Distance, PointStruct, VectorParams,
-        VectorsConfig, SearchPoints, 
-    },
-};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
-const COLLECTION_NAME: &str = "sensedesk";
-const DIMENSION: u64 = 768;
+const DIMENSION: usize = 768;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct StoredPoint {
+    pub id: u64,
+    pub vector: Vec<f32>,
+    pub payload: HashMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct VectorIndex {
+    points: Vec<StoredPoint>,
+}
+
+pub struct ScoredPoint {
+    pub id: u64,
+    pub score: f32,
+    pub payload: HashMap<String, String>,
+}
 
 pub struct VectorStore {
-    client: Qdrant,
+    storage_path: PathBuf,
+    index: tokio::sync::Mutex<VectorIndex>,
 }
 
 impl VectorStore {
-    pub fn new() -> Result<Self> {
-        let client = Qdrant::from_url("http://localhost:6334").build()?;
-        Ok(Self { client })
+    pub fn new(storage_dir: PathBuf) -> Result<Self> {
+        std::fs::create_dir_all(&storage_dir)
+            .context("Failed to create vector storage directory")?;
+
+        let index_path = storage_dir.join("vectors.json");
+        let index = if index_path.exists() {
+            let data = std::fs::read_to_string(&index_path)
+                .context("Failed to read vector index")?;
+            serde_json::from_str(&data).unwrap_or_default()
+        } else {
+            VectorIndex::default()
+        };
+
+        Ok(Self {
+            storage_path: storage_dir,
+            index: tokio::sync::Mutex::new(index),
+        })
     }
 
-    pub async fn ensure_collection(&self) -> Result<()> {
-        if !self.client.collection_exists(COLLECTION_NAME).await? {
-            self.client
-                .create_collection(
-                    qdrant_client::qdrant::CreateCollectionBuilder::new(COLLECTION_NAME)
-                    .vectors_config(VectorsConfig {
-                        config: Some(Config::Params(VectorParams {
-                            size: DIMENSION,
-                            distance: Distance::Cosine.into(),
-                            ..Default::default()
-                        })),
-                    })
-                )
-                .await
-                .context("Failed to create Qdrant collection")?;
-        }
-        Ok(())
+    /// Clear all stored vectors
+    pub async fn clear(&self) -> Result<()> {
+        let mut idx = self.index.lock().await;
+        idx.points.clear();
+        self.persist(&idx).await
     }
 
-    pub async fn upsert_points(&self, points: Vec<PointStruct>) -> Result<()> {
+    /// Add points to the store
+    pub async fn upsert(&self, points: Vec<StoredPoint>) -> Result<()> {
         if points.is_empty() {
             return Ok(());
         }
-        self.client
-            .upsert_points(
-                qdrant_client::qdrant::UpsertPointsBuilder::new(COLLECTION_NAME, points)
-            )
-            .await?;
-        Ok(())
+        let mut idx = self.index.lock().await;
+        idx.points.extend(points);
+        self.persist(&idx).await
     }
 
-    pub async fn search(&self, query_vector: Vec<f32>, limit: u64) -> Result<Vec<qdrant_client::qdrant::ScoredPoint>> {
-        let results = self.client
-            .search_points(
-                SearchPoints {
-                    collection_name: COLLECTION_NAME.to_string(),
-                    vector: query_vector,
-                    limit,
-                    with_payload: Some(true.into()),
-                    ..Default::default()
-                }
-            )
-            .await
-            .context("Failed to search Qdrant")?;
-        Ok(results.result)
-    }
+    /// Cosine similarity search — returns top `limit` results sorted by score
+    pub async fn search(&self, query_vector: Vec<f32>, limit: usize) -> Result<Vec<ScoredPoint>> {
+        let idx = self.index.lock().await;
 
-    pub async fn delete_collection(&self) -> Result<()> {
-        if self.client.collection_exists(COLLECTION_NAME).await? {
-            self.client.delete_collection(COLLECTION_NAME).await?;
+        if idx.points.is_empty() {
+            return Ok(Vec::new());
         }
+
+        let query_norm = norm(&query_vector);
+        if query_norm == 0.0 {
+            return Ok(Vec::new());
+        }
+
+        let mut scored: Vec<ScoredPoint> = idx.points.iter().map(|p| {
+            let dot: f32 = p.vector.iter().zip(query_vector.iter()).map(|(a, b)| a * b).sum();
+            let p_norm = norm(&p.vector);
+            let score = if p_norm > 0.0 { dot / (query_norm * p_norm) } else { 0.0 };
+            ScoredPoint {
+                id: p.id,
+                score,
+                payload: p.payload.clone(),
+            }
+        }).collect();
+
+        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(limit);
+        Ok(scored)
+    }
+
+    pub async fn point_count(&self) -> usize {
+        self.index.lock().await.points.len()
+    }
+
+    async fn persist(&self, idx: &VectorIndex) -> Result<()> {
+        let path = self.storage_path.join("vectors.json");
+        let data = serde_json::to_string(idx).context("Failed to serialize vector index")?;
+        tokio::fs::write(&path, data).await.context("Failed to write vector index")?;
         Ok(())
     }
+}
+
+fn norm(v: &[f32]) -> f32 {
+    v.iter().map(|x| x * x).sum::<f32>().sqrt()
 }
