@@ -53,3 +53,5 @@ desktop.ini
 
 # Tauri dev artifacts
 src-tauri/gen/
+
+SHIPPING.md
