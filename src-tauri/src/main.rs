@@ -11,7 +11,7 @@ fn main() {
     // Use the app's local data directory for storing vectors
     let data_dir = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("sensedesk");
+        .join("vish");
 
     let app_state = commands::AppState::new(data_dir);
 
@@ -19,6 +19,9 @@ fn main() {
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::set_api_key,
+            commands::get_api_key,
+            commands::check_index_exists,
+            commands::get_point_count,
             commands::start_indexing,
             commands::pause_indexing,
             commands::resume_indexing,

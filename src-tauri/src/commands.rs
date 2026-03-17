@@ -6,9 +6,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::path::PathBuf;
 
-/// API key baked in at compile time. Set SENSEDESK_API_KEY env var when building.
+/// API key baked in at compile time. Set VISH_API_KEY env var when building.
 /// Falls back to empty string if not set (user can enter it via Settings UI at runtime).
-const BUNDLED_API_KEY: Option<&str> = option_env!("SENSEDESK_API_KEY");
+const BUNDLED_API_KEY: Option<&str> = option_env!("VISH_API_KEY");
 
 pub struct AppState {
     pub api_key: Arc<tokio::sync::Mutex<String>>,
@@ -53,7 +53,8 @@ pub struct IndexerStatus {
 
 const CHUNK_TOKENS: usize = 512;
 const CHUNK_OVERLAP: usize = 64;
-const EMBED_BATCH_SIZE: usize = 20;
+const EMBED_BATCH_SIZE: usize = 100; // Gemini supports up to 100 per batch
+const MAX_CONCURRENT_FILES: usize = 8;
 
 // Map file extension to MIME type for native Gemini multimodal embedding
 fn mime_for_ext(ext: &str) -> Option<&'static str> {
@@ -70,6 +71,27 @@ fn mime_for_ext(ext: &str) -> Option<&'static str> {
 pub async fn set_api_key(key: String, state: State<'_, AppState>) -> Result<(), String> {
     *state.api_key.lock().await = key;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_api_key(state: State<'_, AppState>) -> Result<String, String> {
+    let key = state.api_key.lock().await.clone();
+    // Return masked version for security — just indicate if set or not
+    if key.is_empty() {
+        Ok(String::new())
+    } else {
+        Ok("set".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn check_index_exists(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.vector_store.has_points().await)
+}
+
+#[tauri::command]
+pub async fn get_point_count(state: State<'_, AppState>) -> Result<usize, String> {
+    Ok(state.vector_store.point_count().await)
 }
 
 #[tauri::command]
@@ -100,8 +122,8 @@ pub async fn start_indexing(folders: Vec<String>, state: State<'_, AppState>) ->
     let http_client = state.http_client.clone();
     let api_key_arc = state.api_key.clone();
 
-    // Clear previous index for a fresh start
-    vector_store.clear().await.map_err(|e| e.to_string())?;
+    // NOTE: We do NOT call vector_store.clear() — the index persists across sessions.
+    // The next_point_id is derived from existing data to avoid ID collisions.
 
     tokio::spawn(async move {
         let all_files: Vec<PathBuf> = crate::indexer::crawler::crawl(&paths).collect();
@@ -109,10 +131,22 @@ pub async fn start_indexing(folders: Vec<String>, state: State<'_, AppState>) ->
         files_done.store(0, Ordering::SeqCst);
         indexed_files.lock().await.clear();
 
-        let mut point_id: u64 = 0;
+        let next_point_id = Arc::new(AtomicU32::new(
+            vector_store.point_count().await as u32
+        ));
+
+        // Use a semaphore to limit concurrent file processing
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_FILES));
+        let mut handles = Vec::new();
 
         for (i, file_path) in all_files.into_iter().enumerate() {
-            // Check if paused or stopped
+            // Check if stopped
+            {
+                let st = status_arc.lock().await.clone();
+                if st == "idle" { break; }
+            }
+
+            // Wait while paused
             loop {
                 let st = status_arc.lock().await.clone();
                 if st == "running" { break; }
@@ -120,118 +154,143 @@ pub async fn start_indexing(folders: Vec<String>, state: State<'_, AppState>) ->
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
 
-            let ext = file_path.extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-            let api_key = api_key_arc.lock().await.clone();
+            let permit = semaphore.clone().acquire_owned().await.unwrap();
+            let vs = vector_store.clone();
+            let hc = http_client.clone();
+            let ak = api_key_arc.clone();
+            let fd = files_done.clone();
+            let idx_files = indexed_files.clone();
+            let pid = next_point_id.clone();
+            let fp = file_path.clone();
+            let file_idx = i;
 
-            // Check if this file type can be natively embedded by Gemini (PDF, images)
-            if let Some(mime) = mime_for_ext(&ext) {
-                // Read binary and send directly to Gemini Embedding 2
-                let bytes = match std::fs::read(&file_path) {
-                    Ok(b) => b,
-                    Err(_) => {
-                        files_done.store((i + 1) as u32, Ordering::SeqCst);
-                        continue;
-                    }
-                };
+            let handle = tokio::spawn(async move {
+                let _permit = permit; // held until this task finishes
 
-                // Skip very large files (>10MB) to avoid API limits
-                if bytes.len() > 10 * 1024 * 1024 {
-                    files_done.store((i + 1) as u32, Ordering::SeqCst);
-                    continue;
-                }
+                let ext = fp.extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                let api_key = ak.lock().await.clone();
 
-                let b64 = base64::Engine::encode(
-                    &base64::engine::general_purpose::STANDARD,
-                    &bytes,
-                );
-
-                let req = crate::embedding::client::make_binary_request(&b64, mime);
-                match crate::embedding::client::batch_embed(&http_client, &api_key, vec![req]).await {
-                    Ok(embeddings) => {
-                        if let Some(embedding) = embeddings.into_iter().next() {
-                            let mut payload = std::collections::HashMap::new();
-                            payload.insert("path".to_string(), file_path.display().to_string());
-                            payload.insert("file_type".to_string(), ext.clone());
-                            payload.insert("chunk_text".to_string(), 
-                                format!("[{} file: {}]", ext.to_uppercase(), 
-                                    file_path.file_name().unwrap_or_default().to_string_lossy()));
-
-                            let point = crate::store::vector::StoredPoint {
-                                id: point_id,
-                                vector: embedding,
-                                payload,
-                            };
-                            point_id += 1;
-                            if let Err(e) = vector_store.upsert(vec![point]).await {
-                                eprintln!("Vector store error: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => eprintln!("Embed error for {:?}: {}", file_path, e),
-                }
-            } else {
-                // Text-based files: extract → chunk → embed
-                let text = match crate::indexer::extractor::extract_content(&file_path) {
-                    Ok(t) => t,
-                    Err(_) => {
-                        files_done.store((i + 1) as u32, Ordering::SeqCst);
-                        continue;
-                    }
-                };
-
-                if text.trim().is_empty() {
-                    files_done.store((i + 1) as u32, Ordering::SeqCst);
-                    continue;
-                }
-
-                let chunks = crate::indexer::chunker::chunk_text(&text, CHUNK_TOKENS, CHUNK_OVERLAP);
-                if chunks.is_empty() {
-                    files_done.store((i + 1) as u32, Ordering::SeqCst);
-                    continue;
-                }
-
-                for batch in chunks.chunks(EMBED_BATCH_SIZE) {
-                    let embed_requests: Vec<_> = batch.iter()
-                        .map(|chunk| crate::embedding::client::make_text_request(chunk))
-                        .collect();
-
-                    let embeddings = match crate::embedding::client::batch_embed(
-                        &http_client, &api_key, embed_requests,
-                    ).await {
-                        Ok(e) => e,
-                        Err(err) => {
-                            eprintln!("Embed error for {:?}: {}", file_path, err);
-                            continue;
+                // Check if this file type can be natively embedded by Gemini (PDF, images)
+                if let Some(mime) = mime_for_ext(&ext) {
+                    let bytes = match std::fs::read(&fp) {
+                        Ok(b) => b,
+                        Err(_) => {
+                            fd.fetch_add(1, Ordering::SeqCst);
+                            return;
                         }
                     };
 
-                    let mut points = Vec::new();
-                    for (j, embedding) in embeddings.into_iter().enumerate() {
-                        let chunk_text = batch.get(j).cloned().unwrap_or_default();
-                        let mut payload = std::collections::HashMap::new();
-                        payload.insert("path".to_string(), file_path.display().to_string());
-                        payload.insert("file_type".to_string(), ext.clone());
-                        payload.insert("chunk_text".to_string(), chunk_text.chars().take(500).collect());
-
-                        points.push(crate::store::vector::StoredPoint {
-                            id: point_id,
-                            vector: embedding,
-                            payload,
-                        });
-                        point_id += 1;
+                    // Skip very large files (>10MB)
+                    if bytes.len() > 10 * 1024 * 1024 {
+                        fd.fetch_add(1, Ordering::SeqCst);
+                        return;
                     }
 
-                    if let Err(e) = vector_store.upsert(points).await {
-                        eprintln!("Vector store error: {}", e);
+                    let b64 = base64::Engine::encode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &bytes,
+                    );
+
+                    let req = crate::embedding::client::make_binary_request(&b64, mime);
+                    match crate::embedding::client::batch_embed(&hc, &api_key, vec![req]).await {
+                        Ok(embeddings) => {
+                            if let Some(embedding) = embeddings.into_iter().next() {
+                                let point_id = pid.fetch_add(1, Ordering::SeqCst) as u64;
+                                let mut payload = std::collections::HashMap::new();
+                                payload.insert("path".to_string(), fp.display().to_string());
+                                payload.insert("file_type".to_string(), ext.clone());
+                                payload.insert("chunk_text".to_string(),
+                                    format!("[{} file: {}]", ext.to_uppercase(),
+                                        fp.file_name().unwrap_or_default().to_string_lossy()));
+
+                                let point = crate::store::vector::StoredPoint {
+                                    id: point_id,
+                                    vector: embedding,
+                                    payload,
+                                };
+                                if let Err(e) = vs.upsert(vec![point]).await {
+                                    eprintln!("Vector store error: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => eprintln!("Embed error for {:?}: {}", fp, e),
+                    }
+                } else {
+                    // Text-based files: extract → chunk → embed
+                    let text = match crate::indexer::extractor::extract_content(&fp) {
+                        Ok(t) => t,
+                        Err(_) => {
+                            fd.fetch_add(1, Ordering::SeqCst);
+                            return;
+                        }
+                    };
+
+                    if text.trim().is_empty() {
+                        fd.fetch_add(1, Ordering::SeqCst);
+                        return;
+                    }
+
+                    let chunks = crate::indexer::chunker::chunk_text(&text, CHUNK_TOKENS, CHUNK_OVERLAP);
+                    if chunks.is_empty() {
+                        fd.fetch_add(1, Ordering::SeqCst);
+                        return;
+                    }
+
+                    for batch in chunks.chunks(EMBED_BATCH_SIZE) {
+                        let embed_requests: Vec<_> = batch.iter()
+                            .map(|chunk| crate::embedding::client::make_text_request(chunk))
+                            .collect();
+
+                        let embeddings = match crate::embedding::client::batch_embed(
+                            &hc, &api_key, embed_requests,
+                        ).await {
+                            Ok(e) => e,
+                            Err(err) => {
+                                eprintln!("Embed error for {:?}: {}", fp, err);
+                                continue;
+                            }
+                        };
+
+                        let mut points = Vec::new();
+                        for (j, embedding) in embeddings.into_iter().enumerate() {
+                            let chunk_text = batch.get(j).cloned().unwrap_or_default();
+                            let point_id = pid.fetch_add(1, Ordering::SeqCst) as u64;
+                            let mut payload = std::collections::HashMap::new();
+                            payload.insert("path".to_string(), fp.display().to_string());
+                            payload.insert("file_type".to_string(), ext.clone());
+                            payload.insert("chunk_text".to_string(), chunk_text.chars().take(500).collect());
+
+                            points.push(crate::store::vector::StoredPoint {
+                                id: point_id,
+                                vector: embedding,
+                                payload,
+                            });
+                        }
+
+                        if let Err(e) = vs.upsert(points).await {
+                            eprintln!("Vector store error: {}", e);
+                        }
                     }
                 }
-            }
 
-            indexed_files.lock().await.push(file_path);
-            files_done.store((i + 1) as u32, Ordering::SeqCst);
+                idx_files.lock().await.push(fp);
+                fd.fetch_add(1, Ordering::SeqCst);
+            });
+
+            handles.push(handle);
+        }
+
+        // Wait for all spawned tasks to complete
+        for handle in handles {
+            let _ = handle.await;
+        }
+
+        // Final flush to ensure everything is persisted
+        if let Err(e) = vector_store.flush().await {
+            eprintln!("Final flush error: {}", e);
         }
 
         *status_arc.lock().await = "idle".to_string();
