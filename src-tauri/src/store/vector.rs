@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-const DIMENSION: usize = 768;
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StoredPoint {
     pub id: u64,
@@ -26,6 +24,7 @@ pub struct ScoredPoint {
 pub struct VectorStore {
     storage_path: PathBuf,
     index: tokio::sync::Mutex<VectorIndex>,
+    dirty: tokio::sync::Mutex<bool>,
 }
 
 impl VectorStore {
@@ -45,7 +44,13 @@ impl VectorStore {
         Ok(Self {
             storage_path: storage_dir,
             index: tokio::sync::Mutex::new(index),
+            dirty: tokio::sync::Mutex::new(false),
         })
+    }
+
+    /// Check if the store has any indexed points
+    pub async fn has_points(&self) -> bool {
+        !self.index.lock().await.points.is_empty()
     }
 
     /// Clear all stored vectors
@@ -55,14 +60,32 @@ impl VectorStore {
         self.persist(&idx).await
     }
 
-    /// Add points to the store
+    /// Add points to the store (buffers writes, call flush() to persist)
     pub async fn upsert(&self, points: Vec<StoredPoint>) -> Result<()> {
         if points.is_empty() {
             return Ok(());
         }
         let mut idx = self.index.lock().await;
         idx.points.extend(points);
-        self.persist(&idx).await
+        *self.dirty.lock().await = true;
+
+        // Auto-flush every 200 points to avoid losing too much on crash
+        if idx.points.len() % 200 < 10 {
+            self.persist(&idx).await?;
+            *self.dirty.lock().await = false;
+        }
+        Ok(())
+    }
+
+    /// Explicitly flush buffered writes to disk
+    pub async fn flush(&self) -> Result<()> {
+        let dirty = *self.dirty.lock().await;
+        if dirty {
+            let idx = self.index.lock().await;
+            self.persist(&idx).await?;
+            *self.dirty.lock().await = false;
+        }
+        Ok(())
     }
 
     /// Cosine similarity search — returns top `limit` results sorted by score

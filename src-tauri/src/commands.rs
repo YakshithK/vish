@@ -162,7 +162,7 @@ pub async fn start_indexing(folders: Vec<String>, state: State<'_, AppState>) ->
             let idx_files = indexed_files.clone();
             let pid = next_point_id.clone();
             let fp = file_path.clone();
-            let file_idx = i;
+            let _file_idx = i;
 
             let handle = tokio::spawn(async move {
                 let _permit = permit; // held until this task finishes

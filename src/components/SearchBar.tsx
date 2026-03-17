@@ -17,8 +17,8 @@ export function SearchBar({ onSearch, isLoading }: SearchBarProps) {
   };
 
   return (
-    <div className="w-full p-6 pb-2 sticky top-0 bg-background/80 backdrop-blur-xl z-10 border-b">
-      <form onSubmit={handleSubmit} className="relative group">
+    <div className="w-full px-6 py-4">
+      <form onSubmit={handleSubmit} className="relative group max-w-2xl mx-auto">
         <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
           <SearchIcon className="w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
         </div>
@@ -26,10 +26,11 @@ export function SearchBar({ onSearch, isLoading }: SearchBarProps) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Semantic Search... e.g. 'find my taxes invoice from last year'"
-          className="w-full pl-12 pr-12 py-4 rounded-2xl border-2 border-border/50 bg-card/50 text-foreground 
-                   placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary focus:ring-4 
-                   focus:ring-primary/20 transition-all text-lg shadow-sm"
+          placeholder="Search your files... e.g. 'physics notes about momentum'"
+          className="w-full pl-12 pr-12 py-4 rounded-2xl border border-border/50 bg-card/50 text-foreground 
+                   placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-2 
+                   focus:ring-primary/20 transition-all text-base shadow-lg shadow-black/10 glass"
+          autoFocus
         />
         {isLoading && (
           <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
