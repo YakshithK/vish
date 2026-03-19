@@ -164,7 +164,7 @@ export function ResultList({ results }: ResultListProps) {
     selectedIdx !== null ? uniqueResults[selectedIdx] : null;
 
   return (
-    <div className="flex gap-4 px-6 py-3 w-full max-w-5xl mx-auto">
+    <div className="flex gap-6 px-8 py-6 w-full max-w-6xl mx-auto">
       {/* Result cards */}
       <div className="flex-1 flex flex-col gap-2.5 overflow-y-auto min-w-0">
         <p className="text-xs text-frost/30 mb-1">
@@ -179,8 +179,8 @@ export function ResultList({ results }: ResultListProps) {
           return (
             <div
               key={`${result.path}-${idx}`}
-              className={`relative flex items-start gap-4 p-4 rounded-2xl glass-card cursor-pointer group animate-fade-in transition-all duration-200
-                         ${isSelected ? "border-cyan-400/30 glow-cyan" : ""}`}
+              className={`relative flex items-start gap-6 p-6 md:p-8 rounded-3xl glass-card cursor-pointer group animate-fade-in
+                         ${isSelected ? "border-cyan-400/40 glow-cyan-strong" : ""}`}
               style={{ animationDelay: `${idx * 50}ms` }}
               onClick={() => handleOpen(result.path)}
               onMouseEnter={() => setSelectedIdx(idx)}
@@ -201,19 +201,19 @@ export function ResultList({ results }: ResultListProps) {
               </div>
 
               {/* Center: filename + snippet */}
-              <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-sm text-frost truncate">
+              <div className="min-w-0 flex-1 mt-1">
+                <h3 className="font-display font-bold text-xl text-frost truncate mb-1">
                   {fileName}
                 </h3>
                 {result.text_excerpt && (
-                  <>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-cyan-400/60 mt-1 block">
-                      Semantic Snippet
+                  <div className="mt-3">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-cyan-400/80 mb-1.5 block">
+                      Semantic Match
                     </span>
-                    <p className="text-xs text-frost/50 mt-0.5 line-clamp-2 leading-relaxed">
-                      {result.text_excerpt.substring(0, 200)}
+                    <p className="text-sm text-frost/60 line-clamp-2 leading-loose font-body">
+                      {result.text_excerpt.substring(0, 250)}...
                     </p>
-                  </>
+                  </div>
                 )}
               </div>
 
@@ -245,27 +245,29 @@ export function ResultList({ results }: ResultListProps) {
 
       {/* Quick Look preview panel */}
       {selectedResult && (
-        <div className="w-64 shrink-0 glass-card rounded-2xl p-4 animate-fade-in-scale hidden lg:block">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-cyan-400/60 mb-3">
+        <div className="w-80 shrink-0 glass-strong rounded-[2rem] p-6 animate-fade-in-scale hidden lg:flex flex-col shadow-2xl border border-white/5">
+          <h4 className="text-[10px] font-bold uppercase tracking-widest text-cyan-400/80 mb-5">
             Quick Look
           </h4>
-          <div className="w-full aspect-[4/3] rounded-xl bg-deepsea-light/50 flex items-center justify-center mb-3 border border-cyan-400/5 overflow-hidden">
+          <div className="w-full aspect-square rounded-2xl bg-deepsea/80 flex items-center justify-center mb-5 border border-cyan-400/10 shadow-inner overflow-hidden">
             {/* Placeholder for preview */}
             <div className="text-center p-4">
               <FileTypeBadge type={selectedResult.file_type} />
             </div>
           </div>
-          <p className="text-xs text-frost/70 font-medium truncate mb-1">
+          <p className="text-base text-frost font-display font-medium truncate mb-2">
             {selectedResult.path.split("/").pop() ||
               selectedResult.path.split("\\").pop()}
           </p>
-          <p className="text-[10px] text-frost/30 truncate" title={selectedResult.path}>
+          <p className="text-xs text-frost/30 truncate font-mono" title={selectedResult.path}>
             {selectedResult.path}
           </p>
           {selectedResult.text_excerpt && (
-            <p className="text-[11px] text-frost/40 mt-2 line-clamp-4 leading-relaxed">
-              {selectedResult.text_excerpt.substring(0, 300)}
-            </p>
+            <div className="mt-4 pt-4 border-t border-white/5">
+              <p className="text-xs text-frost/50 line-clamp-5 leading-loose font-body">
+                {selectedResult.text_excerpt.substring(0, 300)}
+              </p>
+            </div>
           )}
         </div>
       )}

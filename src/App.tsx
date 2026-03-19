@@ -52,23 +52,23 @@ function App() {
       <div className="absolute bottom-[-20%] right-[-10%] w-[400px] h-[300px] rounded-full bg-violet-500/3 blur-[100px] pointer-events-none" />
 
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-3 z-10">
-        <div className="flex items-center gap-2.5">
-          <VishLogo size={24} />
-          <span className="text-sm font-bold gradient-text tracking-tight">
+      <header className={`flex items-center justify-between px-8 py-5 z-20 transition-all duration-700 ${results.length === 0 && !isSearching ? "opacity-0 translate-y-[-20px] pointer-events-none" : "opacity-100 translate-y-0"}`}>
+        <div className="flex items-center gap-3">
+          <VishLogo size={32} />
+          <span className="text-xl font-display font-bold gradient-text tracking-wide">
             Vish
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setShowSettings(!showSettings)}
-            className={`p-2 rounded-lg transition-all duration-200 ${
+            className={`p-2.5 rounded-xl transition-all duration-300 ${
               showSettings
                 ? "bg-cyan-400/10 text-cyan-400"
-                : "text-frost/30 hover:text-frost/60 hover:bg-white/5"
+                : "text-frost/40 hover:text-cyan-400 hover:bg-cyan-400/10"
             }`}
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-5 h-5" />
           </button>
         </div>
       </header>
@@ -91,19 +91,20 @@ function App() {
         <div className="flex-1 flex flex-col z-10">
           {/* Search section */}
           <div
-            className={`flex flex-col transition-all duration-500 ${
+            className={`flex flex-col transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
               results.length === 0 && !isSearching
-                ? "flex-1 justify-center"
-                : "pt-0"
+                ? "flex-1 justify-center -mt-20"
+                : "pt-2"
             }`}
           >
             {results.length === 0 && !isSearching && (
-              <div className="text-center mb-2 px-6 animate-fade-in">
-                <h2 className="text-2xl font-bold gradient-text mb-1">
+              <div className="text-center mb-10 px-8 animate-fade-in-up">
+                <VishLogo size={80} glowing className="mx-auto mb-8 drop-shadow-2xl" />
+                <h2 className="text-4xl md:text-5xl font-display font-bold gradient-text mb-4 tracking-tight">
                   What are you looking for?
                 </h2>
-                <p className="text-frost/30 text-sm">
-                  Search through your indexed files using natural language
+                <p className="text-frost/50 text-xl font-medium max-w-lg mx-auto leading-relaxed">
+                  Search through your local files, code, and documents using natural language.
                 </p>
               </div>
             )}

@@ -96,28 +96,28 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
         </div>
       )}
 
-      <div className="animate-fade-in-up z-10 flex flex-col items-center max-w-lg w-full">
+      <div className="animate-fade-in-up z-10 flex flex-col items-center max-w-2xl w-full">
         {/* Logo */}
-        <VishLogo size={56} glowing className="mb-4" />
-        <h1 className="text-3xl font-bold gradient-text-cyan tracking-tight mb-1">
+        <VishLogo size={72} glowing className="mb-8" />
+        <h1 className="text-5xl font-display font-bold gradient-text-cyan tracking-tight mb-3">
           Casting the Net
         </h1>
-        <p className="text-lg font-semibold text-frost/90 mb-6">
+        <p className="text-xl font-medium text-frost/70 mb-10">
           Where should Vish look?
         </p>
 
         {/* Drop Zone */}
         <div
-          className={`w-full rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 drop-zone ${isDragOver ? "drag-over" : ""}`}
+          className={`w-full rounded-[2rem] p-16 flex flex-col items-center justify-center cursor-pointer transition-all duration-500 drop-zone ${isDragOver ? "drag-over" : ""}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => inputRef.current?.focus()}
         >
-          <div className="w-16 h-16 rounded-2xl bg-cyan-400/10 flex items-center justify-center mb-3">
-            <FolderOpen className="w-8 h-8 text-cyan-400" />
+          <div className="w-20 h-20 rounded-2xl bg-cyan-400/5 border border-cyan-400/10 flex items-center justify-center mb-6 shadow-2xl">
+            <FolderOpen className="w-10 h-10 text-cyan-400/80" />
           </div>
-          <p className="text-sm text-frost/70 text-center">
+          <p className="text-lg text-frost/60 text-center font-body">
             Drop your Documents, Code, or Projects here.
           </p>
         </div>
@@ -131,14 +131,14 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
             onChange={(e) => setFolderPath(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type or paste directory path (e.g., C:\Users\YourUser\Documents)"
-            className="w-full px-4 py-3 pr-10 rounded-xl border border-cyan-400/20 bg-deepsea-light/50 text-frost placeholder:text-frost/30 focus:outline-none focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/20 transition-all text-sm font-mono"
+            className="w-full px-6 py-5 pr-14 rounded-2xl border border-cyan-400/20 bg-deepsea-light/40 text-frost placeholder:text-frost/30 focus:outline-none focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/20 transition-all text-base font-mono shadow-inner"
           />
           {folderPath.trim() && (
             <button
               onClick={() => addFolder(folderPath)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-400 transition-all"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-400 transition-all font-bold"
             >
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-5 h-5" />
             </button>
           )}
         </div>
@@ -149,11 +149,11 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
             {folders.map((folder, idx) => (
               <div
                 key={folder}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl glass-card animate-fade-in"
+                className="flex items-center gap-4 px-5 py-4 rounded-2xl glass-card animate-fade-in"
                 style={{ animationDelay: `${idx * 60}ms` }}
               >
-                <Check className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span className="text-sm text-frost/80 truncate flex-1 font-mono">
+                <Check className="w-5 h-5 text-cyan-400 shrink-0" />
+                <span className="text-base text-frost/90 truncate flex-1 font-mono">
                   {folder}
                 </span>
                 <button
@@ -178,11 +178,11 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
         <button
           onClick={handleContinue}
           disabled={isLoading || folders.length === 0}
-          className="mt-6 px-8 py-3 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed
-                     bg-gradient-to-r from-cyan-400 to-cyan-500 text-deepsea hover:from-cyan-300 hover:to-cyan-400 glow-cyan"
+          className="mt-10 px-12 py-4 rounded-2xl font-display font-bold text-lg tracking-widest transition-all flex items-center gap-3 disabled:opacity-20 disabled:cursor-not-allowed
+                     bg-gradient-to-r from-cyan-400 to-cyan-500 text-deepsea hover:from-cyan-300 hover:to-cyan-400 glow-cyan-strong hover:-translate-y-1"
         >
-          {isLoading ? "Initializing..." : "CONTINUE"}
-          {!isLoading && <ArrowRight className="w-4 h-4" />}
+          {isLoading ? "INITIALIZING..." : "CONTINUE"}
+          {!isLoading && <ArrowRight className="w-5 h-5" />}
         </button>
       </div>
     </div>

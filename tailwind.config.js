@@ -84,6 +84,8 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        display: ['Outfit', '-apple-system', 'sans-serif'],
+        body: ['Inter', '-apple-system', 'sans-serif'],
       },
       animation: {
         'sonar': 'sonar-pulse 2s ease-out infinite',

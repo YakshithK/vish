@@ -1,6 +1,5 @@
 import { useState, FormEvent } from "react";
 import { SearchIcon, Loader2, X, Settings } from "lucide-react";
-import { VishLogo } from "./VishLogo";
 
 interface SearchBarProps {
   onSearch: (query: string) => void;
@@ -44,40 +43,35 @@ export function SearchBar({
           }}
         />
 
-        {/* Logo + action buttons above bar (non-compact mode) */}
-        {!compact && (
-          <div className="flex items-center justify-center mb-3 relative">
-            <VishLogo size={32} glowing={isLoading} />
-            {(onClose || onSettingsClick) && (
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {onSettingsClick && (
-                  <button
-                    onClick={onSettingsClick}
-                    className="p-1.5 rounded-lg text-frost/30 hover:text-frost/60 hover:bg-white/5 transition-all"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                {onClose && (
-                  <button
-                    onClick={onClose}
-                    className="p-1.5 rounded-lg text-frost/30 hover:text-frost/60 hover:bg-white/5 transition-all"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
+        {/* Action buttons (non-compact mode) */}
+        {!compact && (onClose || onSettingsClick) && (
+          <div className="absolute right-0 top-[-40px] flex items-center gap-2">
+            {onSettingsClick && (
+              <button
+                onClick={onSettingsClick}
+                className="p-2 rounded-xl text-frost/40 hover:text-cyan-400 hover:bg-cyan-400/10 transition-all font-bold"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            )}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-2 rounded-xl text-frost/40 hover:text-destructive hover:bg-destructive/10 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
             )}
           </div>
         )}
 
         {/* The Command Bar */}
         <form onSubmit={handleSubmit} className="relative group">
-          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+          <div className={`absolute inset-y-0 left-6 flex items-center pointer-events-none transition-all duration-500`}>
             {isLoading ? (
-              <Loader2 className="w-5 h-5 text-violet-400 animate-spin" />
+              <Loader2 className={`${compact ? "w-5 h-5" : "w-8 h-8"} text-cyan-400 animate-spin`} />
             ) : (
-              <SearchIcon className="w-5 h-5 text-frost/30 group-focus-within:text-cyan-400 transition-colors duration-300" />
+              <SearchIcon className={`${compact ? "w-5 h-5" : "w-8 h-8"} text-frost/40 group-focus-within:text-cyan-400 transition-colors duration-300 drop-shadow`} />
             )}
           </div>
           <input
@@ -86,11 +80,12 @@ export function SearchBar({
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
-            placeholder="Ask Vish anything... 'that PDF about the marketing budget' or 'the python script for the scraper'"
-            className={`w-full pl-12 pr-4 ${compact ? "py-3" : "py-4"} rounded-2xl text-frost placeholder:text-frost/30 
-                       focus:outline-none transition-all duration-300 text-sm glass-strong
-                       border border-cyan-400/10 focus:border-cyan-400/30
-                       ${isLoading ? "border-violet-500/30" : ""}`}
+            placeholder="Ask Vish anything... e.g. 'That PDF about marketing...' or 'Q3 Finances'"
+            className={`w-full ${compact ? "pl-14 pr-6 py-4 text-base" : "pl-16 pr-8 py-6 text-xl md:text-2xl"} 
+                       rounded-[2rem] text-frost placeholder:text-frost/30 font-display
+                       focus:outline-none transition-all duration-500 glass-strong shadow-2xl
+                       border ${isFocused ? "border-cyan-400/50 glow-cyan-strong" : "border-cyan-400/10"}
+                       ${isLoading ? "border-violet-500/50 glow-violet-strong" : ""}`}
             autoFocus
           />
         </form>
