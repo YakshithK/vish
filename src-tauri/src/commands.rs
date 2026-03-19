@@ -91,6 +91,11 @@ fn mime_for_ext(ext: &str) -> Option<&'static str> {
         "png" => Some("image/png"),
         "jpg" | "jpeg" => Some("image/jpeg"),
         "webp" => Some("image/webp"),
+        "mp4" => Some("video/mp4"),
+        "mov" => Some("video/quicktime"),
+        "mp3" => Some("audio/mpeg"),
+        "wav" => Some("audio/wav"),
+        "m4a" => Some("audio/mp4"),
         _ => None,
     }
 }
@@ -151,16 +156,22 @@ pub async fn start_indexing(folders: Vec<String>, state: State<'_, AppState>) ->
     let api_key_arc = state.api_key.clone();
 
     // NOTE: We do NOT call vector_store.clear() — the index persists across sessions.
-    // The next_point_id is derived from existing data to avoid ID collisions.
+    // Individual files are deduped before re-embedding (see delete_by_payload below).
+    // The next_point_id is derived from max existing ID + 1 to avoid collisions.
 
     tokio::spawn(async move {
+        // User requested: Re-scanning completely wipes the old index to start fresh
+        if let Err(e) = vector_store.clear().await {
+            eprintln!("Failed to clear old index: {}", e);
+        }
+
         let all_files: Vec<PathBuf> = crate::indexer::crawler::crawl(&paths).collect();
         files_total.store(all_files.len() as u32, Ordering::SeqCst);
         files_done.store(0, Ordering::SeqCst);
         indexed_files.lock().await.clear();
 
         let next_point_id = Arc::new(AtomicU32::new(
-            vector_store.point_count().await as u32
+            vector_store.max_point_id().await.map(|id| id as u32 + 1).unwrap_or(0)
         ));
 
         // Use a semaphore to limit concurrent file processing
@@ -200,6 +211,12 @@ pub async fn start_indexing(folders: Vec<String>, state: State<'_, AppState>) ->
                     .unwrap_or("")
                     .to_lowercase();
                 let api_key = ak.lock().await.clone();
+
+                // Remove any existing vectors for this file before re-embedding
+                let path_str = fp.display().to_string();
+                if let Err(e) = vs.delete_by_payload("path", &path_str).await {
+                    eprintln!("Failed to remove old vectors for {:?}: {}", fp, e);
+                }
 
                 // Check if this file type can be natively embedded by Gemini (PDF, images)
                 if let Some(mime) = mime_for_ext(&ext) {

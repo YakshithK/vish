@@ -60,6 +60,46 @@ impl VectorStore {
         self.persist(&idx).await
     }
 
+    /// Delete all points whose payload[key] == value (used to remove old vectors before re-indexing a file)
+    pub async fn delete_by_payload(&self, key: &str, value: &str) -> Result<usize> {
+        let mut idx = self.index.lock().await;
+        let before = idx.points.len();
+        idx.points.retain(|p| {
+            p.payload.get(key).map(|v| v.as_str()) != Some(value)
+        });
+        let removed = before - idx.points.len();
+        if removed > 0 {
+            *self.dirty.lock().await = true;
+        }
+        Ok(removed)
+    }
+
+    /// Prune vectors for files that no longer exist on the physical disk
+    pub async fn prune_missing_files(&self) -> Result<usize> {
+        let mut idx = self.index.lock().await;
+        let before = idx.points.len();
+        println!("prune_missing_files: Checking {} points...", before);
+        
+        idx.points.retain(|p| {
+            if let Some(path_str) = p.payload.get("path") {
+                let exists = std::path::Path::new(path_str).exists();
+                if !exists {
+                    println!("prune_missing_files: Path missing: {}", path_str);
+                }
+                exists
+            } else {
+                false // remove if no path
+            }
+        });
+        
+        let removed = before - idx.points.len();
+        println!("prune_missing_files: Removed {} ghost points out of {}", removed, before);
+        if removed > 0 {
+            *self.dirty.lock().await = true;
+        }
+        Ok(removed)
+    }
+
     /// Add points to the store (buffers writes, call flush() to persist)
     pub async fn upsert(&self, points: Vec<StoredPoint>) -> Result<()> {
         if points.is_empty() {
@@ -88,8 +128,12 @@ impl VectorStore {
         Ok(())
     }
 
-    /// Cosine similarity search — returns top `limit` results sorted by score
+    /// Cosine similarity search — returns top `limit` results sorted by score.
+    /// Results below `MIN_SCORE_THRESHOLD` are discarded so only genuinely
+    /// relevant results are surfaced.
     pub async fn search(&self, query_vector: Vec<f32>, limit: usize) -> Result<Vec<ScoredPoint>> {
+        const MIN_SCORE_THRESHOLD: f32 = 0.35;
+
         let idx = self.index.lock().await;
 
         if idx.points.is_empty() {
@@ -101,14 +145,18 @@ impl VectorStore {
             return Ok(Vec::new());
         }
 
-        let mut scored: Vec<ScoredPoint> = idx.points.iter().map(|p| {
+        let mut scored: Vec<ScoredPoint> = idx.points.iter().filter_map(|p| {
             let dot: f32 = p.vector.iter().zip(query_vector.iter()).map(|(a, b)| a * b).sum();
             let p_norm = norm(&p.vector);
             let score = if p_norm > 0.0 { dot / (query_norm * p_norm) } else { 0.0 };
-            ScoredPoint {
-                id: p.id,
-                score,
-                payload: p.payload.clone(),
+            if score >= MIN_SCORE_THRESHOLD {
+                Some(ScoredPoint {
+                    id: p.id,
+                    score,
+                    payload: p.payload.clone(),
+                })
+            } else {
+                None
             }
         }).collect();
 
@@ -119,6 +167,12 @@ impl VectorStore {
 
     pub async fn point_count(&self) -> usize {
         self.index.lock().await.points.len()
+    }
+
+    /// Returns the maximum point ID in the store, or None if empty.
+    /// Used to derive the next safe ID (avoids collisions after deletions).
+    pub async fn max_point_id(&self) -> Option<u64> {
+        self.index.lock().await.points.iter().map(|p| p.id).max()
     }
 
     async fn persist(&self, idx: &VectorIndex) -> Result<()> {

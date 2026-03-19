@@ -144,6 +144,22 @@ export function ResultList({ results }: ResultListProps) {
     (a, b) => b.score - a.score
   );
 
+  // Normalize scores for display so the spread between results is visible.
+  // Raw cosine similarities cluster in a narrow band (e.g. 0.45-0.55) which
+  // looks like "similar %" to the user. Min-max normalization maps the best
+  // result to ~98% and worst to a proportionally lower value.
+  const maxScore = uniqueResults.length > 0 ? uniqueResults[0].score : 1;
+  const minScore = uniqueResults.length > 1 ? uniqueResults[uniqueResults.length - 1].score : 0;
+  const scoreRange = maxScore - minScore;
+  const normalizeScore = (raw: number) => {
+    if (uniqueResults.length <= 1 || scoreRange < 0.001) {
+      // Single result or all identical scores: show raw as capped at 98
+      return Math.min(Math.round(raw * 100), 98);
+    }
+    // Map to 40-98 range so even the lowest result doesn't look absurdly bad
+    return Math.round(40 + ((raw - minScore) / scoreRange) * 58);
+  };
+
   const selectedResult =
     selectedIdx !== null ? uniqueResults[selectedIdx] : null;
 
@@ -155,7 +171,7 @@ export function ResultList({ results }: ResultListProps) {
           {uniqueResults.length} result{uniqueResults.length !== 1 ? "s" : ""}
         </p>
         {uniqueResults.map((result, idx) => {
-          const relevance = (result.score * 100).toFixed(0);
+          const relevance = normalizeScore(result.score);
           const fileName =
             result.path.split("/").pop() || result.path.split("\\").pop();
           const isSelected = selectedIdx === idx;
