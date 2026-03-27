@@ -1,41 +1,9 @@
 import { useRef, useState, DragEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus } from "lucide-react";
-import { VishLogo } from "./VishLogo";
+import { Plus, Folder, X } from "lucide-react";
 
 interface SetupScreenProps {
   onStartIndexing: () => void;
-}
-
-function SelectedFolders({
-  folders,
-  className = "",
-}: {
-  folders: string[];
-  className?: string;
-}) {
-  if (folders.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className={className}>
-      <p className="inter-ui text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-main)]/88">
-        Added Directories
-      </p>
-      <div className="setup-folder-list mt-3 flex flex-wrap gap-2 pr-1">
-        {folders.map((folder) => (
-          <div
-            key={folder}
-            className="glass-surface rounded-xl px-3 py-2 text-sm text-white/90"
-            title={folder}
-          >
-            {folder}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
@@ -54,13 +22,15 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
     }
   };
 
+  const removeFolder = (path: string) => {
+    setFolders((prev) => prev.filter((f) => f !== path));
+  };
+
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const items = e.dataTransfer.items;
-    if (!items) {
-      return;
-    }
+    if (!items) return;
 
     for (let i = 0; i < items.length; i += 1) {
       const item = items[i];
@@ -91,110 +61,217 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
   };
 
   return (
-    <section className="window-shell setup-shell animate-fade-in">
-      <div className="window-panel grid h-full grid-cols-1 overflow-hidden md:grid-cols-[clamp(260px,28vw,340px)_minmax(0,1fr)]">
-        <aside className="hidden border-r border-white/10 px-8 py-9 md:block">
-          <div className="max-w-[290px]">
-            <h1 className="setup-hero-title inter-ui text-[3.5rem] font-semibold leading-[0.92] text-[var(--text-main)] md:text-[4rem]">
-              Initial Setup
-            </h1>
-            <p className="mt-5 max-w-[260px] text-[1.03rem] leading-8 text-[var(--text-soft)]">
-              Choose the directories Vish should index first so search is ready as soon as setup completes.
-            </p>
-          </div>
+    <div
+      className="animate-fade-in"
+      style={{
+        width: "100%",
+        maxWidth: 480,
+        display: "flex",
+        flexDirection: "column",
+        gap: 24,
+      }}
+    >
+      {/* Wordmark */}
+      <div
+        className="mono-ui uppercase"
+        style={{
+          textAlign: "center",
+          fontSize: "0.68rem",
+          letterSpacing: "0.4em",
+          color: "var(--text-dim)",
+        }}
+      >
+        vish
+      </div>
 
-          <SelectedFolders folders={folders} className="mt-8 max-w-[290px]" />
-        </aside>
+      {/* Headline */}
+      <h1
+        className="inter-ui"
+        style={{
+          textAlign: "center",
+          fontSize: "1.4rem",
+          fontWeight: 300,
+          color: "var(--text-main)",
+          margin: 0,
+        }}
+      >
+        Where should Vish look?
+      </h1>
 
-        <section className="setup-main-section px-5 py-5 md:px-9 md:py-10">
-          <div className="setup-mobile-summary glass-surface mb-6 rounded-[1.4rem] px-5 py-4 md:hidden">
-            <p className="setup-mobile-title inter-ui text-[2rem] font-semibold leading-tight text-[var(--text-main)]">
-              Initial Setup
-            </p>
-            <p className="mt-3 max-w-[30rem] text-[0.98rem] leading-7 text-[var(--text-soft)]">
-              Choose the directories Vish should index first so search can start immediately.
-            </p>
+      {/* Dropzone */}
+      <button
+        type="button"
+        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => inputRef.current?.focus()}
+        className={`vish-dropzone ${isDragOver ? "vish-dropzone-active" : ""}`}
+        style={{ width: "100%", padding: "40px 24px", textAlign: "center" }}
+      >
+        <Folder
+          style={{
+            width: 32,
+            height: 32,
+            margin: "0 auto 12px",
+            color: isDragOver ? "rgba(155,255,215,0.9)" : "rgba(155,255,215,0.45)",
+            transition: "color 150ms ease-out",
+          }}
+          strokeWidth={1.25}
+        />
+        <p
+          className="mono-ui"
+          style={{
+            fontSize: "0.8rem",
+            color: isDragOver ? "var(--text-soft)" : "var(--text-dim)",
+            transition: "color 150ms ease-out",
+          }}
+        >
+          {isDragOver ? "Drop folders here" : "Drag & drop folders here"}
+        </p>
+      </button>
 
-            <SelectedFolders folders={folders} className="mt-5" />
-          </div>
+      {/* Divider */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <div style={{ flex: 1, height: 1, background: "var(--border-faint)" }} />
+        <span
+          className="mono-ui"
+          style={{ fontSize: "0.68rem", color: "var(--text-dim)", letterSpacing: "0.08em" }}
+        >
+          or type a path
+        </span>
+        <div style={{ flex: 1, height: 1, background: "var(--border-faint)" }} />
+      </div>
 
-          <div className="setup-copy-column">
-            <h2 className="setup-primary-heading inter-ui text-[1.9rem] font-semibold tracking-tight text-[var(--text-main)] md:text-[2.2rem]">
-              Choose Directories to Index
-            </h2>
-            <p className="setup-primary-copy mt-3 max-w-[44rem] text-[1rem] leading-7 text-[var(--text-soft)] md:leading-8">
-              Drag and drop folders into the drop zone or manually input directory paths below.
-              Vish needs these locations now so indexing can start immediately.
-            </p>
-          </div>
+      {/* Path input row */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={folderPath}
+          onChange={(e) => setFolderPath(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && folderPath.trim()) addFolder(folderPath);
+          }}
+          placeholder="/path/to/folder"
+          className="glass-surface mono-ui"
+          style={{
+            flex: 1,
+            height: 40,
+            borderRadius: 10,
+            padding: "0 14px",
+            fontSize: "0.8rem",
+            color: "var(--text-main)",
+            outline: "none",
+            border: "1px solid var(--border-faint)",
+            background: "rgba(255,255,255,0.03)",
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => addFolder(folderPath)}
+          className="glass-surface"
+          style={{
+            height: 40,
+            padding: "0 16px",
+            borderRadius: 10,
+            fontSize: "0.8rem",
+            color: "var(--text-soft)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            border: "1px solid var(--border-faint)",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <Plus style={{ width: 14, height: 14 }} />
+          Add
+        </button>
+      </div>
 
-          <button
-            type="button"
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragOver(true);
-            }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => inputRef.current?.focus()}
-            className={`setup-dropzone glass-surface-strong glow-border mt-7 flex w-full flex-col items-center justify-center rounded-[1.7rem] px-6 text-center transition md:mt-8 ${
-              isDragOver ? "scale-[1.01]" : ""
-            }`}
-          >
-            <VishLogo size={72} glowing className="setup-dropzone-logo" />
-            <div className="setup-dropzone-copy mono-ui mt-6 tracking-tight text-[rgba(31,42,33,0.88)] md:mt-7">
-              Drag &amp; Drop Folders Here
-            </div>
-          </button>
-
-          <div className="mt-8 md:mt-9">
-            <h3 className="setup-section-heading inter-ui setup-copy-column text-[1.15rem] font-semibold text-[var(--text-main)] md:text-[1.55rem]">
-              Manually Input Directories (Optional)
-            </h3>
-
-            <div className="setup-input-row setup-copy-column mt-4 flex flex-col gap-3 md:flex-row">
-              <input
-                ref={inputRef}
-                type="text"
-                value={folderPath}
-                onChange={(e) => setFolderPath(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && folderPath.trim()) {
-                    addFolder(folderPath);
-                  }
+      {/* Folder chips */}
+      {folders.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {folders.map((folder) => (
+            <div key={folder} className="vish-folder-chip" title={folder}>
+              <Folder style={{ width: 11, height: 11, flexShrink: 0 }} />
+              <span
+                style={{
+                  maxWidth: 260,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
                 }}
-                placeholder="/path/to/your/folder"
-                className="setup-directory-input glass-surface mono-ui h-14 flex-1 rounded-2xl px-5 text-base outline-none md:text-lg"
-              />
+              >
+                {folder}
+              </span>
               <button
                 type="button"
-                onClick={() => addFolder(folderPath)}
-                className="glass-surface inter-ui flex h-14 items-center justify-center gap-2 rounded-2xl px-6 text-base font-medium text-[var(--text-main)] md:text-lg"
+                onClick={() => removeFolder(folder)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  color: "inherit",
+                  opacity: 0.6,
+                  marginLeft: 2,
+                }}
+                aria-label={`Remove ${folder}`}
               >
-                <Plus className="h-5 w-5" />
-                Add
+                <X style={{ width: 11, height: 11 }} />
               </button>
             </div>
-          </div>
+          ))}
+        </div>
+      )}
 
-          {error && (
-            <div className="setup-copy-column mt-4 rounded-2xl border border-red-200/30 bg-red-400/10 px-4 py-3 text-sm text-red-100">
-              {error}
-            </div>
-          )}
+      {/* Error */}
+      {error && (
+        <div
+          style={{
+            borderRadius: 10,
+            border: "1px solid rgba(248,113,113,0.3)",
+            background: "rgba(248,113,113,0.08)",
+            padding: "10px 14px",
+            fontSize: "0.8rem",
+            color: "#fca5a5",
+          }}
+        >
+          {error}
+        </div>
+      )}
 
-          <div className="setup-copy-column mt-auto flex justify-stretch pt-6 pb-8 md:justify-end md:pb-10">
-            <button
-              type="button"
-              onClick={handleContinue}
-              disabled={isLoading}
-              className="inter-ui w-full rounded-2xl bg-[rgba(168,255,221,0.96)] px-7 py-3 text-lg font-semibold text-[var(--ink)] shadow-[0_0_22px_rgba(155,255,215,0.42)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
-            >
-              {isLoading ? "Starting..." : "Continue"}
-            </button>
-          </div>
-        </section>
-      </div>
-    </section>
+      {/* CTA */}
+      <button
+        type="button"
+        onClick={handleContinue}
+        disabled={isLoading || folders.length === 0}
+        className="inter-ui"
+        style={{
+          width: "100%",
+          height: 48,
+          borderRadius: 12,
+          background: folders.length === 0 ? "rgba(155,255,215,0.15)" : "rgba(168,255,221,0.96)",
+          color: folders.length === 0 ? "rgba(155,255,215,0.35)" : "var(--ink)",
+          fontSize: "0.95rem",
+          fontWeight: 600,
+          border: "none",
+          cursor: folders.length === 0 ? "not-allowed" : "pointer",
+          transition: "all 150ms ease-out",
+          boxShadow: folders.length > 0 ? "0 0 22px rgba(155,255,215,0.32)" : "none",
+        }}
+      >
+        {isLoading ? "Starting…" : "Start indexing →"}
+      </button>
+    </div>
   );
 }

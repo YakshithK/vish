@@ -91,10 +91,10 @@ For CI releases, the key is baked into the binary via the `VISH_API_KEY` secret.
 
 ## Styling
 
-The app uses a "Deep Sea Neon" palette defined in `tailwind.config.js`:
-- Background: Deep navy (`#0A0F14`)
-- Accent: Electric cyan (`#00F5FF`)
-- Secondary: Digital violet (`#7000FF`)
+The app uses a "Deep Forest Neon" palette defined in `tailwind.config.js` and `src/index.css`:
+- Background: Forest deep (`#0c1510`)
+- Accent: Mint glow (`rgba(155, 255, 215, ...)`)
+- Text: Frosted forest white (`#e7efe8`)
 
 Custom CSS classes in `index.css` use HSL variables and glassmorphism effects (`backdrop-filter`, translucent backgrounds).
 

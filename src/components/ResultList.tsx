@@ -1,132 +1,293 @@
-import { Fragment } from "react";
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  FileImage,
-  FileSpreadsheet,
+  Search,
+  ExternalLink,
+  FolderOpen,
   FileText,
-  FileType2,
-  Folder,
-  File as FileIcon,
+  FileImage,
+  FileCode,
+  Music,
+  Video,
+  File,
+  Braces,
 } from "lucide-react";
 import { SearchResult } from "../hooks/useSearch";
 
 interface ResultListProps {
   results: SearchResult[];
+  query?: string;
 }
 
-function getFileName(path: string) {
-  return path.split("/").pop() || path.split("\\").pop() || path;
+interface TypeConfig {
+  Icon: React.ElementType;
+  color: string;
+  label: string;
 }
 
-function getTypeIcon(type: string) {
-  const normalized = type.toLowerCase();
+function getTypeConfig(fileType: string, path: string): TypeConfig {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const t = fileType.toLowerCase();
 
-  if (normalized.includes("pdf")) {
-    return FileType2;
-  }
-  if (normalized.includes("image") || ["png", "jpg", "jpeg", "webp"].includes(normalized)) {
-    return FileImage;
-  }
-  if (normalized.includes("sheet") || ["xls", "xlsx", "csv"].includes(normalized)) {
-    return FileSpreadsheet;
-  }
-  if (normalized.includes("folder")) {
-    return Folder;
-  }
-  if (normalized.includes("text") || normalized.includes("doc")) {
-    return FileText;
-  }
+  if (t.includes("pdf") || ext === "pdf")
+    return { Icon: FileText, color: "#F97316", label: "PDF" };
+  if (t.includes("image") || ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"].includes(ext))
+    return { Icon: FileImage, color: "#22C55E", label: "IMG" };
+  if (["mp3", "wav", "m4a", "flac", "ogg", "aac"].includes(ext) || t.includes("audio"))
+    return { Icon: Music, color: "#A855F7", label: "AUD" };
+  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext) || t.includes("video"))
+    return { Icon: Video, color: "#EF4444", label: "VID" };
+  if (["json", "yaml", "yml", "toml", "ini"].includes(ext))
+    return { Icon: Braces, color: "#F59E0B", label: "CFG" };
+  if (
+    ["rs", "py", "js", "ts", "tsx", "jsx", "go", "c", "cpp", "java", "rb", "php", "cs", "swift", "kt"].includes(ext) ||
+    t.includes("code")
+  )
+    return { Icon: FileCode, color: "#3B82F6", label: ext.toUpperCase().slice(0, 3) || "COD" };
+  if (["md", "txt", "log", "csv"].includes(ext))
+    return { Icon: FileText, color: "rgba(155,255,215,0.6)", label: ext.toUpperCase() };
+  if (t.includes("doc") || ["docx", "doc", "odt", "rtf"].includes(ext))
+    return { Icon: FileText, color: "#F59E0B", label: "DOC" };
 
-  return FileIcon;
+  return { Icon: File, color: "rgba(155,255,215,0.38)", label: ext.toUpperCase().slice(0, 3) || "FIL" };
 }
 
-function highlightSnippet(text: string) {
-  const terms = ["semantic", "match", "contains", "budget", "references", "explores", "opportunities"];
-  const matcher = new RegExp(`(${terms.join("|")})`, "ig");
-
-  return text.split(matcher).map((part, index) => {
-    const isMatch = terms.some((term) => term.toLowerCase() === part.toLowerCase());
-    return isMatch ? <mark key={`${part}-${index}`}>{part}</mark> : <Fragment key={`${part}-${index}`}>{part}</Fragment>;
-  });
+function getFileName(path: string): string {
+  return path.split(/[\\/]/).pop() || path;
 }
 
-export function ResultList({ results }: ResultListProps) {
-  const visibleResults = results.slice(0, 6);
-  const centeredSparseLayout = visibleResults.length < 3;
+function getDirPath(path: string): string {
+  const parts = path.split(/[\\/]/);
+  if (parts.length <= 1) return path;
+  const dir = parts.slice(0, -1).join("/");
+  const home = "/home/";
+  if (dir.startsWith(home)) {
+    const afterHome = dir.slice(home.length);
+    const slash = afterHome.indexOf("/");
+    if (slash !== -1) return "~/" + afterHome.slice(slash + 1);
+    return "~";
+  }
+  return dir;
+}
+
+function normalizeScore(score: number, maxScore: number, minScore: number): number {
+  if (maxScore === minScore) return 85;
+  return Math.round(((score - minScore) / (maxScore - minScore)) * 57 + 40);
+}
+
+export function ResultList({ results, query }: ResultListProps) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const handleOpen = async (path: string) => {
     try {
       await invoke("open_file", { path });
-    } catch (error) {
-      console.error("Failed to open file:", error);
+    } catch (e) {
+      console.error("Failed to open file:", e);
+    }
+  };
+
+  const handleReveal = async (e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    try {
+      await invoke("reveal_in_explorer", { path });
+    } catch (e) {
+      console.error("Failed to reveal file:", e);
     }
   };
 
   if (results.length === 0) {
     return (
-      <div className="glass-surface flex min-h-[420px] items-center justify-center rounded-[1.35rem] px-6 text-center">
-        <div>
-          <p className="mono-ui text-sm uppercase tracking-[0.22em] text-[var(--text-dim)]">
-            no results yet
-          </p>
-          <p className="mt-3 text-lg text-[var(--text-soft)]">
-            Submit a query to see semantic matches across your indexed files.
-          </p>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "64px 24px",
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 14,
+            background: "rgba(155,255,215,0.04)",
+            border: "1px solid rgba(155,255,215,0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 16,
+          }}
+        >
+          <Search
+            style={{ width: 22, height: 22, color: "rgba(155,255,215,0.4)" }}
+            strokeWidth={1.5}
+          />
         </div>
+        {query ? (
+          <>
+            <p
+              className="inter-ui"
+              style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-soft)", margin: 0 }}
+            >
+              No results for "{query}"
+            </p>
+            <p
+              className="mono-ui"
+              style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 6 }}
+            >
+              Try different terms or check your indexed folders
+            </p>
+          </>
+        ) : (
+          <p
+            className="mono-ui"
+            style={{ fontSize: "0.75rem", color: "var(--text-dim)", margin: 0 }}
+          >
+            Submit a query to search your files
+          </p>
+        )}
       </div>
     );
   }
 
+  const scores = results.map((r) => r.score);
+  const maxScore = Math.max(...scores);
+  const minScore = Math.min(...scores);
+
   return (
-    <div
-      className={
-        centeredSparseLayout
-          ? "flex flex-col items-center gap-5 md:flex-row md:flex-wrap md:justify-center"
-          : "grid grid-cols-1 gap-5 md:grid-cols-3"
-      }
-    >
-      {visibleResults.map((result, idx) => {
+    <div style={{ display: "flex", flexDirection: "column", paddingTop: 10 }}>
+      {results.map((result, idx) => {
         const fileName = getFileName(result.path);
-        const Icon = getTypeIcon(result.file_type);
-        const snippet = result.text_excerpt
-          ? result.text_excerpt.trim()
-          : "contains key design documents and related semantic matches...";
+        const dirPath = getDirPath(result.path);
+        const { Icon, color, label } = getTypeConfig(result.file_type, result.path);
+        const scorePct = normalizeScore(result.score, maxScore, minScore);
+        const snippet = result.text_excerpt?.trim();
+        const isHovered = hoveredIdx === idx;
 
         return (
-          <button
-            type="button"
+          <div
             key={`${result.path}-${idx}`}
-            onClick={() => {
-              handleOpen(result.path);
+            className="result-row"
+            style={{ animationDelay: `${Math.min(idx, 9) * 35}ms` }}
+            onMouseEnter={() => setHoveredIdx(idx)}
+            onMouseLeave={() => setHoveredIdx(null)}
+            onClick={() => handleOpen(result.path)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") handleOpen(result.path);
             }}
-            className={`result-card glass-surface text-center ${
-              centeredSparseLayout ? "w-full md:w-[352px]" : "w-full"
-            }`}
           >
-            <div className="flex h-full flex-col items-center justify-center">
-              <div
-                className="flex h-20 w-20 items-center justify-center rounded-[1.1rem] bg-[rgba(161,255,218,0.12)] text-[rgba(156,255,216,0.94)] shadow-[0_0_28px_rgba(155,255,215,0.22)]"
-              >
-                <Icon className="h-10 w-10" strokeWidth={1.75} />
-              </div>
-
-              <div className="mt-6 flex w-full flex-col items-center">
-                <h3
-                  className="result-title inter-ui max-w-[240px] text-[1.15rem] font-semibold tracking-tight text-[rgba(32,42,33,0.92)]"
-                  title={fileName}
-                >
-                  {fileName}
-                </h3>
-
-                <p className="mt-5 max-w-[300px] text-[rgba(236,242,237,0.96)]">
-                  <span className="text-[rgba(236,242,237,0.86)]">semantic match: </span>
-                  <span className="result-snippet-copy mono-ui">
-                    {highlightSnippet(`${snippet}...`)}
-                  </span>
-                </p>
-              </div>
+            {/* Icon well */}
+            <div
+              className="result-icon-well"
+              style={{
+                background: `${color}12`,
+                border: `1px solid ${color}30`,
+                boxShadow: `0 0 14px ${color}18`,
+                color,
+              }}
+              title={label}
+            >
+              <Icon style={{ width: 17, height: 17 }} strokeWidth={1.6} />
             </div>
-          </button>
+
+            {/* Center: name + path + snippet */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                className="inter-ui"
+                style={{
+                  fontSize: "0.84rem",
+                  fontWeight: 600,
+                  color: "var(--text-main)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  lineHeight: 1.35,
+                }}
+              >
+                {fileName}
+              </div>
+
+              <div
+                className="mono-ui"
+                style={{
+                  fontSize: "0.67rem",
+                  color: "var(--text-mono)",
+                  marginTop: 2,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  lineHeight: 1.3,
+                }}
+                title={dirPath}
+              >
+                {dirPath}
+              </div>
+
+              {snippet && (
+                <div
+                  className="inter-ui"
+                  style={{
+                    fontSize: "0.74rem",
+                    color: "var(--text-soft)",
+                    marginTop: 6,
+                    lineHeight: 1.5,
+                    fontStyle: "italic",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical" as const,
+                    overflow: "hidden",
+                    opacity: 0.82,
+                  }}
+                >
+                  "{snippet}"
+                </div>
+              )}
+            </div>
+
+            {/* Right: score or actions */}
+            <div
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-end",
+                justifyContent: "flex-start",
+                gap: 5,
+                paddingTop: 2,
+                minWidth: 72,
+              }}
+            >
+              {isHovered ? (
+                <>
+                  <button
+                    className="result-action-btn"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpen(result.path);
+                    }}
+                  >
+                    <ExternalLink style={{ width: 10, height: 10 }} />
+                    Open
+                  </button>
+                  <button
+                    className="result-action-btn"
+                    type="button"
+                    onClick={(e) => handleReveal(e, result.path)}
+                  >
+                    <FolderOpen style={{ width: 10, height: 10 }} />
+                    Reveal
+                  </button>
+                </>
+              ) : (
+                <span className="result-score">{scorePct}%</span>
+              )}
+            </div>
+          </div>
         );
       })}
     </div>

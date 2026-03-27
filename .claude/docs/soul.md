@@ -1,52 +1,81 @@
 ## 1. The Identity: "Vish"
 We aren't going for a "file explorer" vibe. We want **Vish** to feel like an ambient layer of your OS—something that is "living" in your computer.
 
-* **The Vibe:** Liquid, translucent, and hyper-fast.
-* **The Metaphor:** A "Sonar" for your data. It’s not just looking for keywords; it’s sensing the *meaning* of your files.
-* **The Logo Concept:** A stylized, geometric "V" that resembles a stylized hook or a ripple in water.
+* **The Vibe:** Precise, translucent, and hyper-fast. A precision instrument, not a toy.
+* **The Metaphor:** A "Sonar" for your data. It's not just looking for keywords; it's sensing the *meaning* of your files.
+* **The Logo Concept:** A stylized, geometric "V" that resembles a ripple or wave form.
 
-### Color Palette: "Deep Sea Neon"
-Since "Vish" sounds like "Fish," we’ll lean into a sophisticated, dark oceanic aesthetic.
-* **Primary (Background):** `#0A0F14` (Deep Obsidian/Navy)
-* **Accent 1 (Action):** `#00F5FF` (Electric Cyan) – for highlights and "active" indexing states.
-* **Accent 2 (Depth):** `#7000FF` (Digital Violet) – to represent the "AI/Neural" layer.
-* **Text:** `#E0E6ED` (Frosted Glass White)
+### Color Palette: "Deep Forest Neon"
+Vish uses a dark, forest-green aesthetic — organic yet technical, like a terminal in the woods.
+* **Primary (Background):** `#0c1510` (Forest Deep — near-OLED dark forest green)
+* **Surface:** `rgba(13, 20, 16, 0.48)` (Forest Panel — translucent elevated layer)
+* **Accent (Action):** `rgba(155, 255, 215, ~0.8–0.96)` (Mint Glow — electric mint/seafoam green)
+* **Glow:** `rgba(155, 255, 215, 0.75)` (Mint glow for shadows and halos)
+* **Text Main:** `#e7efe8` (Frosted forest white)
+* **Text Soft:** `rgba(231, 239, 232, 0.82)`
+* **Text Dim:** `rgba(231, 239, 232, 0.58)`
+* **Text Mono:** `rgba(155, 215, 185, 0.65)` (for paths, meta, scores)
+* **Ink:** `#243126` (dark forest green for text on light/mint backgrounds)
+
+**File type accent colors** (semantic, independent of main theme):
+- PDF: `#F97316` (orange)
+- Image: `#22C55E` (green)
+- Code: `#3B82F6` (blue)
+- Audio: `#A855F7` (purple)
+- Video: `#EF4444` (red)
+- Markdown/Text: mint-dim
+- Config/JSON/YAML: `#F59E0B` (amber)
 
 ---
 
 ## 2. The Screen Architecture
 
-### I. The "Onboarding & Casting" (Setup)
-Instead of a boring file picker, we call this **Casting the Net**.
-* **The Visual:** A large, central "Drop Zone" where you can drag folders.
-* **Interaction:** A sleek list of "Watched Folders." When a folder is added, a subtle pulse animation (the cyan color) ripples across the screen to show it's being indexed.
-* **Micro-copy:** "Where should Vish look? Drop your Documents, Code, or Projects here."
+### I. Setup ("Where should Vish look?")
+Single-column centered layout, max-w-[480px]. No sidebar.
+* **Top:** Vish wordmark (mono, tiny, uppercase, tracked)
+* **Headline:** "Where should Vish look?" (light weight, medium size)
+* **Dropzone:** Large dashed rounded rect (mint border) — primary interaction hero
+* **Path input row:** Text field + Add button for manual entry
+* **Folder chips:** Compact mint-tinted pills with inline × removal
+* **CTA:** Full-width "Start indexing →" — enabled only when folders are selected
 
-### II. The "Command Bar" (Search)
-This should be a floating, minimalist bar (similar to Raycast or Alfred).
-* **The Visual:** A blur-heavy (Glassmorphism) bar that appears in the center of the screen.
-* **Features:** As you type, the background of the bar glows slightly with the "Digital Violet" color, indicating the AI is processing the semantic meaning.
-* **Placeholder Text:** "Ask Vish anything... 'that PDF about the marketing budget' or 'the python script for the scraper'."
+### II. Indexing (progress screen)
+Centered, single-column, max-w-[520px]. No sidebar.
+* **Status label:** "INDEXING · 8 concurrent workers" (mono, uppercase, dim)
+* **Progress bar:** 2px height, sharp (no border-radius), mint gradient with shimmer
+* **Stats row:** files done / total · percent · ETA remaining (mono, small)
+* **Cancel:** Minimal ghost link, centered below
 
-### III. The "Surface" (Results)
-Semantic search provides context, so the results shouldn't just be filenames.
-* **The Visual:** A vertical list of "Cards."
-* **Layout:**
-    * **Left Side:** A high-quality icon based on file type.
-    * **Center:** The Filename and a "Semantic Snippet"—a highlighted sentence from *inside* the file that best matches the intent of the search.
-    * **Right Side:** Metadata (Last modified, Relevance score %).
-* **Action:** Hovering over a result shows a "Quick Look" preview without opening the app.
+### III. Search Hero (no query submitted)
+Full-height centered layout.
+* **VISH wordmark** top-left (large, light Inter uppercase)
+* **Settings gear** top-right
+* **Centered search bar:** Large, glassmorphism input with VishLogo inside
 
-### IV. The "Tackle Box" (Settings)
-* **The Visual:** A clean, sidebar-driven menu.
-* **Features:**
-    * **Index Management:** A "Re-scan" button and a toggle for "Deep Scan" (OCR for images).
-    * **Neural Stats:** A cool visual showing how many "Embeddings" have been created (e.g., "14,203 concepts mapped").
-    * **Theme Toggle:** Dark mode (Deep Sea) vs. Light mode (Arctic Ice).
+### IV. Search Results — the precision instrument
+Full-screen list layout. No modal chrome.
+* **Top bar (50px):** VishLogo (small) · wordmark · compact search bar · settings gear
+* **Meta row:** "{N} results for 'query'"
+* **Results list** (scrollable): compact horizontal rows, not cards
+
+**Result row anatomy:**
+- Left: file type badge (3-letter code, color-coded pill)
+- Center: filename (bold) · directory path (mono, dim) · snippet (1 line, soft)
+- Right: score bar (2px, matches badge color) + score%
+- Hover: left mint accent bar slides in · action buttons (Open / Reveal) replace score
+
+### V. Settings (drawer)
+380px right-edge drawer, slides in from right.
+* Backdrop: semi-opaque blur
+* Header: "Settings" + X close
+* Sections: Background sync status · Indexed folders (list + add) · Danger zone (Reset Index)
+* No border-radius on right edges (flush with screen edge)
 
 ---
 
 ## 3. Design Elements
-* **Glassmorphism:** Use heavy background blurs (`backdrop-filter: blur(20px)`) so the app feels like it’s floating over the user's wallpaper.
-* **Glow Effects:** Use "Soft Glows" around buttons rather than hard shadows. It makes the UI feel like it’s emitting light.
-* **Typography:** A wide, modern Sans-Serif like **Inter** or **Geist Sans** for that high-tech, developer-friendly look.
+* **Glassmorphism:** `backdrop-filter: blur(14–20px)` for panels and top bar.
+* **Glow Effects:** Soft mint glows (`rgba(155,255,215,...)`) around CTAs and focused inputs.
+* **Typography:** **Inter** (UI text, all weights) + **JetBrains Mono** (paths, scores, meta, labels)
+* **Animation:** 150–220ms ease-out. Stagger list rows 30ms. No decorative motion in results.
+* **Precision aesthetic:** Sharp progress bars, type-coded badges, score bars, hover reveals. Feels like a dev tool, not a consumer app.

@@ -14,17 +14,28 @@ function App() {
   const { screen, setScreen } = useAppState();
   const { results, isSearching, error, search, query, setQuery } = useSearch();
   const [showSettings, setShowSettings] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const hasResults = results.length > 0;
-  const searchView = screen === "search";
+  const handleSearch = (q: string) => {
+    setHasSubmitted(true);
+    search(q);
+  };
+
+  const showResults = screen === "search" && hasSubmitted;
+  const showHero = screen === "search" && !hasSubmitted;
   const isSetupView = screen === "setup" || screen === "indexing";
 
   return (
     <main
-      className={`forest-app flex h-screen items-center justify-center overflow-hidden ${
-        isSetupView ? "px-2 py-2 md:px-3 md:py-3" : "px-4 py-4 md:px-6 md:py-6"
+      className={`forest-app ${
+        showResults
+          ? "flex h-screen flex-col overflow-hidden"
+          : isSetupView
+          ? "flex h-screen items-center justify-center px-2 py-2 md:px-3 md:py-3"
+          : "flex h-screen items-center justify-center overflow-hidden px-4 py-4 md:px-6 md:py-6"
       }`}
     >
+      {/* Loading */}
       {screen === "loading" && (
         <div className="relative z-10 flex flex-col items-center gap-5 animate-fade-in">
           <VishLogo size={62} glowing />
@@ -35,10 +46,12 @@ function App() {
         </div>
       )}
 
+      {/* Setup */}
       {screen === "setup" && (
         <SetupScreen onStartIndexing={() => setScreen("indexing")} />
       )}
 
+      {/* Indexing */}
       {screen === "indexing" && (
         <IndexingScreen
           onComplete={() => setScreen("search")}
@@ -46,73 +59,134 @@ function App() {
         />
       )}
 
-      {searchView && !hasResults && !isSearching && (
-        <section className="relative z-10 flex min-h-[78vh] w-full flex-col">
-          <div className="flex items-start justify-between px-2 pt-1 md:px-4">
-            <div className="inter-ui text-[2rem] font-light uppercase tracking-tight text-[var(--text-main)] md:text-[2.75rem] lg:text-[3.5rem]">
-              VISH
+      {/* Search Hero — centered command-palette layout */}
+      {showHero && (
+        <section className="relative z-10 flex h-full w-full flex-col items-center justify-center">
+          {/* Logo + wordmark */}
+          <div className="flex flex-col items-center gap-3 mb-8">
+            <VishLogo size={52} glowing />
+            <span
+              className="inter-ui uppercase"
+              style={{ fontSize: "0.72rem", letterSpacing: "0.5em", color: "var(--text-dim)", fontWeight: 300 }}
+            >
+              vish
+            </span>
+          </div>
+
+          {/* Search bar */}
+          <SearchBar
+            onSearch={handleSearch}
+            isLoading={isSearching}
+            value={query}
+            onValueChange={setQuery}
+            variant="hero"
+          />
+
+          {/* Hint text */}
+          <p
+            className="mono-ui mt-5"
+            style={{ fontSize: "0.72rem", color: "var(--text-dim)", letterSpacing: "0.04em" }}
+          >
+            ↵ search · files indexed locally
+          </p>
+
+          {/* Settings gear — bottom-right */}
+          <button
+            onClick={() => setShowSettings(true)}
+            className="glass-surface absolute bottom-6 right-6 flex items-center justify-center rounded-xl text-white/60 transition hover:text-white/90"
+            style={{ width: 38, height: 38 }}
+            aria-label="Open settings"
+          >
+            <Settings style={{ width: 16, height: 16 }} />
+          </button>
+        </section>
+      )}
+
+      {/* Search Results — full-screen list layout */}
+      {showResults && (
+        <>
+          {/* Top bar */}
+          <div className="vish-topbar">
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <VishLogo size={22} />
+              <span
+                className="mono-ui uppercase"
+                style={{ fontSize: "0.7rem", letterSpacing: "0.3em", color: "var(--text-dim)" }}
+              >
+                vish
+              </span>
             </div>
+
+            <div style={{ flex: 1, maxWidth: 580, margin: "0 20px" }}>
+              <SearchBar
+                onSearch={handleSearch}
+                isLoading={isSearching}
+                value={query}
+                onValueChange={setQuery}
+                variant="window"
+              />
+            </div>
+
             <button
               onClick={() => setShowSettings(true)}
-              className="glass-surface flex h-11 w-11 items-center justify-center rounded-2xl text-white/85 transition hover:text-white md:h-16 md:w-16 lg:h-20 lg:w-20"
+              className="glass-surface flex items-center justify-center rounded-xl text-white/70 transition hover:text-white"
+              style={{ width: 36, height: 36, flexShrink: 0 }}
               aria-label="Open settings"
             >
-              <Settings className="h-5 w-5 md:h-8 md:w-8 lg:h-10 lg:w-10" />
+              <Settings style={{ width: 15, height: 15 }} />
             </button>
           </div>
 
-          <div className="flex flex-1 items-center justify-center">
-            <SearchBar
-              onSearch={search}
-              isLoading={isSearching}
-              value={query}
-              onValueChange={setQuery}
-              variant="hero"
-            />
+          {/* Meta row */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "6px 24px",
+              borderBottom: "1px solid var(--border-faint)",
+            }}
+          >
+            <span style={{ fontSize: "0.75rem", color: "var(--text-soft)" }}>
+              {isSearching ? (
+                <span style={{ color: "var(--text-dim)" }}>searching…</span>
+              ) : (
+                <>
+                  <span style={{ color: "var(--accent-dim-text)" }}>{results.length}</span>
+                  {" results"}
+                  {query && (
+                    <span style={{ color: "var(--text-dim)" }}> for "{query}"</span>
+                  )}
+                </>
+              )}
+            </span>
           </div>
-        </section>
-      )}
 
-      {searchView && (hasResults || isSearching) && (
-        <section className="window-shell animate-fade-in">
-          <div className="window-panel flex flex-col gap-4 p-4 md:p-6">
-            <div className="flex items-center justify-between px-1 pb-2 pt-1">
-              <div className="inter-ui text-[1.05rem] font-medium tracking-tight text-[var(--text-main)]">
-                Vish Search Results
-              </div>
-              <button
-                onClick={() => setShowSettings(true)}
-                className="glass-surface flex h-10 w-10 items-center justify-center rounded-2xl text-white/85 transition hover:text-white md:h-14 md:w-14 lg:h-16 lg:w-16"
-                aria-label="Open settings"
-              >
-                <Settings className="h-4 w-4 md:h-6 md:w-6 lg:h-7 lg:w-7" />
-              </button>
-            </div>
-
-            <SearchBar
-              onSearch={search}
-              isLoading={isSearching}
-              value={query}
-              onValueChange={setQuery}
-              variant="window"
-            />
-
-            {error && (
+          {/* Error */}
+          {error && (
+            <div
+              style={{ padding: "8px 24px" }}
+            >
               <div className="rounded-2xl border border-red-200/35 bg-red-400/10 px-4 py-3 text-sm text-red-100">
                 {error}
               </div>
-            )}
+            </div>
+          )}
 
-            <ResultList results={results} />
+          {/* Results list */}
+          <div className="results-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 0 24px" }}>
+            <ResultList results={results} query={query} />
           </div>
-        </section>
+        </>
       )}
 
-      {searchView && showSettings && (
+      {/* Settings panel — accessible from search screen */}
+      {screen === "search" && showSettings && (
         <SettingsPanel
           onClose={() => setShowSettings(false)}
           onReindex={() => {
             setShowSettings(false);
+            setHasSubmitted(false);
             setScreen("setup");
           }}
         />
