@@ -44,11 +44,11 @@ function getTypeConfig(fileType: string, path: string): TypeConfig {
   )
     return { Icon: FileCode, color: "#3B82F6", label: ext.toUpperCase().slice(0, 3) || "COD" };
   if (["md", "txt", "log", "csv"].includes(ext))
-    return { Icon: FileText, color: "rgba(155,255,215,0.6)", label: ext.toUpperCase() };
+    return { Icon: FileText, color: "#6ddba8", label: ext.toUpperCase() };
   if (t.includes("doc") || ["docx", "doc", "odt", "rtf"].includes(ext))
     return { Icon: FileText, color: "#F59E0B", label: "DOC" };
 
-  return { Icon: File, color: "rgba(155,255,215,0.38)", label: ext.toUpperCase().slice(0, 3) || "FIL" };
+  return { Icon: File, color: "#4a9e7a", label: ext.toUpperCase().slice(0, 3) || "FIL" };
 }
 
 function getFileName(path: string): string {
@@ -156,7 +156,10 @@ export function ResultList({ results, query }: ResultListProps) {
           <div
             key={`${result.path}-${idx}`}
             className="result-row"
-            style={{ animationDelay: `${Math.min(idx, 9) * 35}ms` }}
+            style={{
+              animationDelay: `${Math.min(idx, 9) * 35}ms`,
+              '--row-accent': color,
+            } as React.CSSProperties}
             onClick={() => handleOpen(result.path)}
             role="button"
             tabIndex={0}

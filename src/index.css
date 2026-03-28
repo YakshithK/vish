@@ -782,7 +782,10 @@
   margin: 0 14px 5px;
   padding: 13px 15px;
   background: rgba(13, 22, 16, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-left: 2px solid color-mix(in srgb, var(--row-accent, rgba(155, 255, 215, 0.5)) 16%, transparent);
   border-radius: 11px;
   cursor: pointer;
   transition:
@@ -795,15 +798,20 @@
 
 .result-row:hover {
   background: rgba(18, 32, 22, 0.88);
-  border-color: rgba(155, 255, 215, 0.15);
-  border-left-color: rgba(155, 255, 215, 0.42);
+  border-top-color: rgba(155, 255, 215, 0.08);
+  border-right-color: rgba(155, 255, 215, 0.08);
+  border-bottom-color: rgba(155, 255, 215, 0.08);
+  border-left-color: color-mix(in srgb, var(--row-accent, rgba(155, 255, 215, 0.6)) 52%, transparent);
   box-shadow:
     0 0 0 1px rgba(155, 255, 215, 0.04),
     0 4px 20px rgba(0, 0, 0, 0.22);
 }
 
 .result-row:focus-visible {
-  border-color: rgba(155, 255, 215, 0.28);
+  border-top-color: rgba(155, 255, 215, 0.28);
+  border-right-color: rgba(155, 255, 215, 0.28);
+  border-bottom-color: rgba(155, 255, 215, 0.28);
+  /* border-left-color intentionally omitted — preserves type accent */
   box-shadow: 0 0 0 2px rgba(155, 255, 215, 0.12);
 }
 
