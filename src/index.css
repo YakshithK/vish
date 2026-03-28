@@ -819,14 +819,24 @@
   /* color, border, bg, boxShadow set inline per type */
 }
 
-/* Score badge */
-.result-score {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.7rem;
-  color: rgba(155, 255, 215, 0.62);
-  letter-spacing: 0.02em;
+/* Action buttons — hidden by default, fade in when parent row is hovered */
+.result-row-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  padding-top: 2px;
   flex-shrink: 0;
-  white-space: nowrap;
+  min-width: 72px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.result-row:hover .result-row-actions,
+.result-row:focus-within .result-row-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Action buttons (shown on hover) */

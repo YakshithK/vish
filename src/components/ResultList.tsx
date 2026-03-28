@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Search,
@@ -70,14 +69,7 @@ function getDirPath(path: string): string {
   return dir;
 }
 
-function normalizeScore(score: number, maxScore: number, minScore: number): number {
-  if (maxScore === minScore) return 85;
-  return Math.round(((score - minScore) / (maxScore - minScore)) * 57 + 40);
-}
-
 export function ResultList({ results, query }: ResultListProps) {
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-
   const handleOpen = async (path: string) => {
     try {
       await invoke("open_file", { path });
@@ -152,27 +144,19 @@ export function ResultList({ results, query }: ResultListProps) {
     );
   }
 
-  const scores = results.map((r) => r.score);
-  const maxScore = Math.max(...scores);
-  const minScore = Math.min(...scores);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", paddingTop: 10 }}>
       {results.map((result, idx) => {
         const fileName = getFileName(result.path);
         const dirPath = getDirPath(result.path);
         const { Icon, color, label } = getTypeConfig(result.file_type, result.path);
-        const scorePct = normalizeScore(result.score, maxScore, minScore);
         const snippet = result.text_excerpt?.trim();
-        const isHovered = hoveredIdx === idx;
 
         return (
           <div
             key={`${result.path}-${idx}`}
             className="result-row"
             style={{ animationDelay: `${Math.min(idx, 9) * 35}ms` }}
-            onMouseEnter={() => setHoveredIdx(idx)}
-            onMouseLeave={() => setHoveredIdx(null)}
             onClick={() => handleOpen(result.path)}
             role="button"
             tabIndex={0}
@@ -248,44 +232,27 @@ export function ResultList({ results, query }: ResultListProps) {
               )}
             </div>
 
-            {/* Right: score or actions */}
-            <div
-              style={{
-                flexShrink: 0,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-end",
-                justifyContent: "flex-start",
-                gap: 5,
-                paddingTop: 2,
-                minWidth: 72,
-              }}
-            >
-              {isHovered ? (
-                <>
-                  <button
-                    className="result-action-btn"
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpen(result.path);
-                    }}
-                  >
-                    <ExternalLink style={{ width: 10, height: 10 }} />
-                    Open
-                  </button>
-                  <button
-                    className="result-action-btn"
-                    type="button"
-                    onClick={(e) => handleReveal(e, result.path)}
-                  >
-                    <FolderOpen style={{ width: 10, height: 10 }} />
-                    Reveal
-                  </button>
-                </>
-              ) : (
-                <span className="result-score">{scorePct}%</span>
-              )}
+            {/* Right: action buttons — visible on row hover via CSS */}
+            <div className="result-row-actions">
+              <button
+                className="result-action-btn"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpen(result.path);
+                }}
+              >
+                <ExternalLink style={{ width: 10, height: 10 }} />
+                Open
+              </button>
+              <button
+                className="result-action-btn"
+                type="button"
+                onClick={(e) => handleReveal(e, result.path)}
+              >
+                <FolderOpen style={{ width: 10, height: 10 }} />
+                Reveal
+              </button>
             </div>
           </div>
         );
