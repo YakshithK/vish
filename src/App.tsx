@@ -70,11 +70,11 @@ function App() {
       {/* Search Hero — centered command-palette layout */}
       {showHero && (
         <section className="relative z-10 flex h-full w-full flex-col items-center justify-center">
-          {/* Ambient glow behind search — depth without noise */}
+          {/* Ambient glow — behind siblings via DOM order */}
           <div className="hero-ambient-glow" aria-hidden="true" />
 
           {/* Logo + wordmark */}
-          <div className="flex flex-col items-center gap-3 mb-8">
+          <div className="animate-fade-in flex flex-col items-center gap-3 mb-8">
             <VishLogo size={52} glowing />
             <span
               className="inter-ui uppercase"
@@ -85,24 +85,32 @@ function App() {
           </div>
 
           {/* Search bar */}
-          <SearchBar
-            onSearch={handleSearch}
-            isLoading={isSearching}
-            value={query}
-            onValueChange={setQuery}
-            variant="hero"
-          />
+          <div
+            className="animate-fade-in w-full"
+            style={{ animationDelay: "80ms" }}
+          >
+            <SearchBar
+              onSearch={handleSearch}
+              isLoading={isSearching}
+              value={query}
+              onValueChange={setQuery}
+              variant="hero"
+            />
+          </div>
 
           {/* Hint text */}
           <p
-            className="mono-ui mt-5"
-            style={{ fontSize: "0.72rem", color: "var(--text-dim)", letterSpacing: "0.04em" }}
+            className="mono-ui animate-fade-in mt-5"
+            style={{ fontSize: "0.72rem", color: "var(--text-dim)", letterSpacing: "0.04em", animationDelay: "160ms" }}
           >
             ↵ search · files indexed locally
           </p>
 
-          {/* Suggestion chips — trigger search on click */}
-          <div className="hero-suggestions">
+          {/* Suggestion chips */}
+          <div
+            className="animate-fade-in hero-suggestions"
+            style={{ animationDelay: "240ms" }}
+          >
             {SEARCH_SUGGESTIONS.map((s) => (
               <button
                 key={s}
