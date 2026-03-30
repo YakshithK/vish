@@ -7,6 +7,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
 
+const MAX_PREVIEW_TEXT_BYTES: usize = 12 * 1024;
+const MAX_PREVIEW_TEXT_LINES: usize = 220;
+const MAX_PREVIEW_PDF_BYTES: usize = 20 * 1024 * 1024;
+
 /// API key resolution order:
 /// 1. VISH_API_KEY baked in at compile time (CI builds)
 /// 2. GEMINI_API_KEY baked in at compile time (dev builds)
@@ -217,6 +221,209 @@ fn build_image_thumbnail(path: &str, file_type: &str) -> Option<String> {
         bytes,
     );
     Some(format!("data:{};base64,{}", mime, encoded))
+}
+
+fn preview_title(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_else(|| path.to_str().unwrap_or("Unknown file"))
+        .to_string()
+}
+
+fn preview_file_type(path: &Path) -> String {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+}
+
+fn is_text_preview_ext(ext: &str) -> bool {
+    matches!(
+        ext,
+        "txt"
+            | "md"
+            | "rs"
+            | "py"
+            | "js"
+            | "ts"
+            | "jsx"
+            | "tsx"
+            | "go"
+            | "c"
+            | "cpp"
+            | "h"
+            | "java"
+            | "cs"
+            | "json"
+            | "yaml"
+            | "yml"
+            | "toml"
+            | "docx"
+            | "pptx"
+    )
+}
+
+fn truncate_preview_text(content: &str) -> (String, bool) {
+    let mut result = String::new();
+    let mut truncated = false;
+
+    for (idx, line) in content.lines().enumerate() {
+        if idx >= MAX_PREVIEW_TEXT_LINES || result.len() >= MAX_PREVIEW_TEXT_BYTES {
+            truncated = true;
+            break;
+        }
+
+        let remaining = MAX_PREVIEW_TEXT_BYTES.saturating_sub(result.len());
+        if remaining == 0 {
+            truncated = true;
+            break;
+        }
+
+        let clipped_line: String = line.chars().take(remaining).collect();
+        if clipped_line.len() < line.len() {
+            if !result.is_empty() {
+                result.push('\n');
+            }
+            result.push_str(&clipped_line);
+            truncated = true;
+            break;
+        }
+
+        if !result.is_empty() {
+            result.push('\n');
+        }
+        result.push_str(line);
+    }
+
+    if result.is_empty() && !content.is_empty() {
+        let clipped: String = content.chars().take(MAX_PREVIEW_TEXT_BYTES).collect();
+        truncated = clipped.len() < content.len();
+        return (clipped, truncated);
+    }
+
+    (result, truncated)
+}
+
+fn read_text_preview(path: &Path, ext: &str) -> Result<(String, bool), String> {
+    let content = if ext == "pdf" {
+        crate::indexer::media::extract_pdf(path)
+            .map_err(|error| format!("Failed extracting PDF text: {}", error))?
+    } else {
+        crate::indexer::extractor::extract_content(path)
+            .map_err(|error| format!("Failed reading preview text: {}", error))?
+    };
+
+    if content.trim().is_empty() {
+        return Ok((String::from("No preview text available."), false));
+    }
+
+    Ok(truncate_preview_text(&content))
+}
+
+fn mime_for_preview(ext: &str) -> &'static str {
+    match ext {
+        "pdf" => "application/pdf",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        _ => "application/octet-stream",
+    }
+}
+
+#[tauri::command]
+pub async fn get_preview(path: String) -> Result<crate::search::PreviewPayload, String> {
+    let preview_path = PathBuf::from(&path);
+    let title = preview_title(&preview_path);
+    let file_type = preview_file_type(&preview_path);
+
+    if !preview_path.exists() {
+        return Ok(crate::search::PreviewPayload::Error {
+            title,
+            path,
+            file_type,
+            message: "File no longer exists.".to_string(),
+        });
+    }
+
+    let metadata = std::fs::metadata(&preview_path)
+        .map_err(|error| format!("Failed loading preview metadata: {}", error))?;
+
+    if !metadata.is_file() {
+        return Ok(crate::search::PreviewPayload::Unsupported {
+            title,
+            path,
+            file_type,
+            message: "Preview is only available for files.".to_string(),
+            text_excerpt: None,
+        });
+    }
+
+    let ext = file_type.as_str();
+
+    if matches!(ext, "png" | "jpg" | "jpeg" | "webp") {
+        return build_image_thumbnail(&path, ext)
+            .map(|data_url| crate::search::PreviewPayload::Image {
+                title,
+                path,
+                file_type,
+                data_url,
+            })
+            .ok_or_else(|| "Failed building image preview.".to_string());
+    }
+
+    if ext == "pdf" {
+        let text_excerpt = read_text_preview(&preview_path, ext).ok().map(|(content, _)| content);
+        if metadata.len() as usize > MAX_PREVIEW_PDF_BYTES {
+            return Ok(crate::search::PreviewPayload::Unsupported {
+                title,
+                path,
+                file_type,
+                message: "PDF is too large to render in-app.".to_string(),
+                text_excerpt,
+            });
+        }
+
+        let bytes = std::fs::read(&preview_path)
+            .map_err(|error| format!("Failed reading PDF preview: {}", error))?;
+        let encoded = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            bytes,
+        );
+
+        return Ok(crate::search::PreviewPayload::Pdf {
+            title,
+            path,
+            file_type,
+            data_url: format!("data:{};base64,{}", mime_for_preview(ext), encoded),
+            text_excerpt,
+        });
+    }
+
+    if is_text_preview_ext(ext) {
+        return match read_text_preview(&preview_path, ext) {
+            Ok((content, truncated)) => Ok(crate::search::PreviewPayload::Text {
+                title,
+                path,
+                file_type,
+                content,
+                truncated,
+            }),
+            Err(message) => Ok(crate::search::PreviewPayload::Error {
+                title,
+                path,
+                file_type,
+                message,
+            }),
+        };
+    }
+
+    Ok(crate::search::PreviewPayload::Unsupported {
+        title,
+        path,
+        file_type,
+        message: "Preview is not available for this file type yet.".to_string(),
+        text_excerpt: None,
+    })
 }
 
 async fn index_single_file(

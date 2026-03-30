@@ -81,7 +81,7 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
           color: "var(--text-dim)",
         }}
       >
-        vish
+        grove
       </div>
 
       {/* Headline */}
@@ -95,7 +95,7 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
           margin: 0,
         }}
       >
-        Where should Vish look?
+        Where should Grove look?
       </h1>
 
       {/* Dropzone */}
@@ -105,7 +105,7 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.focus()}
-        className={`vish-dropzone ${isDragOver ? "vish-dropzone-active" : ""}`}
+        className={`grove-dropzone ${isDragOver ? "grove-dropzone-active" : ""}`}
         style={{ width: "100%", padding: "40px 24px", textAlign: "center" }}
       >
         <Folder
@@ -199,7 +199,7 @@ export function SetupScreen({ onStartIndexing }: SetupScreenProps) {
       {folders.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {folders.map((folder) => (
-            <div key={folder} className="vish-folder-chip" title={folder}>
+            <div key={folder} className="grove-folder-chip" title={folder}>
               <Folder style={{ width: 11, height: 11, flexShrink: 0 }} />
               <span
                 style={{

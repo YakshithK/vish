@@ -76,9 +76,9 @@ export function IndexingScreen({ onComplete, onCancel }: IndexingScreenProps) {
 
       {/* Progress bar */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div className="vish-progress-track" style={{ width: "100%" }}>
+        <div className="grove-progress-track" style={{ width: "100%" }}>
           <div
-            className="vish-progress-fill"
+            className="grove-progress-fill"
             style={{ width: `${progress}%` }}
           />
         </div>

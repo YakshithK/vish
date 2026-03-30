@@ -36,7 +36,7 @@ export function SearchBar({
               type="text"
               value={value}
               onChange={(e) => onValueChange(e.target.value)}
-              placeholder="ask vish anything..."
+              placeholder="ask grove anything..."
               className="mono-ui min-w-0 flex-1 bg-transparent text-2xl font-medium text-white outline-none italic placeholder:not-italic md:text-[2.6rem]"
               style={{ caretColor: "rgba(155,255,215,0.9)" }}
               autoFocus
@@ -71,7 +71,7 @@ export function SearchBar({
   // Compact top-bar variant
   return (
     <form onSubmit={handleSubmit} style={{ width: "100%" }}>
-      <label className="vish-search-compact flex items-center gap-2">
+      <label className="grove-search-compact flex items-center gap-2">
         {isLoading ? (
           <Loader2
             style={{ width: 14, height: 14, flexShrink: 0, color: "var(--text-dim)" }}

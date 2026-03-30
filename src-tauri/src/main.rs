@@ -13,7 +13,7 @@ fn main() {
     // Use the app's local data directory for storing vectors
     let data_dir = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("vish");
+        .join("grove");
 
     let app_state = commands::AppState::new(data_dir);
 
@@ -40,6 +40,7 @@ fn main() {
             commands::stop_indexing,
             commands::get_indexer_status,
             commands::search,
+            commands::get_preview,
             commands::open_file,
             commands::reveal_in_explorer,
         ])

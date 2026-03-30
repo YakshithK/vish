@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Settings } from "lucide-react";
 import { SetupScreen } from "./components/SetupScreen";
 import { IndexingScreen } from "./components/IndexingScreen";
 import { SearchBar } from "./components/SearchBar";
 import { ResultList } from "./components/ResultList";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
-import { VishLogo } from "./components/VishLogo";
-import { useSearch } from "./hooks/useSearch";
+import { GroveLogo } from "./components/GroveLogo";
+import { PreviewPane } from "./components/PreviewPane";
+import { useSearch, type SearchResult } from "./hooks/useSearch";
 import { useAppState } from "./hooks/useAppState";
 import "./App.css";
 
@@ -23,15 +24,57 @@ function App() {
   const { results, isSearching, error, search, query, setQuery } = useSearch();
   const [showSettings, setShowSettings] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
+  const [isPreviewOverlayOpen, setIsPreviewOverlayOpen] = useState(false);
+  const [isCompactPreview, setIsCompactPreview] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 1100 : false
+  );
 
   const handleSearch = (q: string) => {
     setHasSubmitted(true);
     search(q);
   };
 
+  const handleSelectResult = (result: SearchResult) => {
+    setSelectedResult(result);
+    if (isCompactPreview) {
+      setIsPreviewOverlayOpen(true);
+    }
+  };
+
+  const closePreviewOverlay = () => setIsPreviewOverlayOpen(false);
+
   const showResults = screen === "search" && hasSubmitted;
   const showHero = screen === "search" && !hasSubmitted;
   const isSetupView = screen === "setup" || screen === "indexing";
+
+  useEffect(() => {
+    const onResize = () => setIsCompactPreview(window.innerWidth < 1100);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    if (results.length === 0) {
+      setSelectedResult(null);
+      setIsPreviewOverlayOpen(false);
+      return;
+    }
+
+    setSelectedResult((current) => {
+      if (current) {
+        const stillPresent = results.find((result) => result.path === current.path);
+        if (stillPresent) return stillPresent;
+      }
+      return results[0];
+    });
+  }, [results]);
+
+  useEffect(() => {
+    if (!isCompactPreview) {
+      setIsPreviewOverlayOpen(false);
+    }
+  }, [isCompactPreview]);
 
   return (
     <main
@@ -46,7 +89,7 @@ function App() {
       {/* Loading */}
       {screen === "loading" && (
         <div className="relative z-10 flex flex-col items-center gap-5 animate-fade-in">
-          <VishLogo size={62} glowing />
+          <GroveLogo size={62} glowing />
           <Loader2 className="h-6 w-6 animate-spin text-white/80" />
           <p className="mono-ui text-sm tracking-[0.22em] text-[var(--text-soft)] uppercase">
             loading index
@@ -75,12 +118,12 @@ function App() {
 
           {/* Logo + wordmark */}
           <div className="animate-fade-in flex flex-col items-center gap-3 mb-8">
-            <VishLogo size={52} glowing />
+            <GroveLogo size={52} glowing />
             <span
               className="inter-ui uppercase"
               style={{ fontSize: "0.72rem", letterSpacing: "0.5em", color: "var(--text-dim)", fontWeight: 300 }}
             >
-              vish
+              grove
             </span>
           </div>
 
@@ -140,14 +183,14 @@ function App() {
       {showResults && (
         <>
           {/* Top bar */}
-          <div className="vish-topbar">
+          <div className="grove-topbar">
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <VishLogo size={22} />
+              <GroveLogo size={22} />
               <span
                 className="mono-ui uppercase"
                 style={{ fontSize: "0.7rem", letterSpacing: "0.3em", color: "var(--text-dim)" }}
               >
-                vish
+                grove
               </span>
             </div>
 
@@ -199,9 +242,28 @@ function App() {
           )}
 
           {/* Results list */}
-          <div className="results-scroll" style={{ flex: 1, overflowY: "auto", padding: "0 0 24px" }}>
-            <ResultList results={results} query={query} />
+          <div className="search-results-layout">
+            <div className="results-scroll" style={{ overflowY: "auto", padding: "0 0 24px" }}>
+              <ResultList
+                results={results}
+                query={query}
+                selectedPath={selectedResult?.path ?? null}
+                onSelect={handleSelectResult}
+              />
+            </div>
+
+            {!isCompactPreview && (
+              <PreviewPane result={selectedResult} />
+            )}
           </div>
+
+          {isCompactPreview && isPreviewOverlayOpen && (
+            <div className="preview-overlay-backdrop" onClick={closePreviewOverlay}>
+              <div onClick={(e) => e.stopPropagation()}>
+                <PreviewPane result={selectedResult} onClose={closePreviewOverlay} isOverlay />
+              </div>
+            </div>
+          )}
         </>
       )}
 

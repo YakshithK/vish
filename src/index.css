@@ -764,7 +764,7 @@
 /* Top bar (results view) — NO backdrop-filter: content scrolls beneath it
    every frame, so blur would force a full re-composite on each scroll tick.
    Solid opaque bg achieves the sticky look without the FPS cost. */
-.vish-topbar {
+.grove-topbar {
   display: flex;
   align-items: center;
   gap: 0.625rem;
@@ -776,7 +776,7 @@
 }
 
 /* Search inputs */
-.vish-search-hero {
+.grove-search-hero {
   width: 100%;
   display: flex;
   align-items: center;
@@ -788,14 +788,14 @@
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
-.vish-search-hero:focus-within {
+.grove-search-hero:focus-within {
   border-color: rgba(155, 255, 215, 0.5);
   box-shadow:
     0 0 0 1px rgba(155, 255, 215, 0.06),
     0 0 22px rgba(155, 255, 215, 0.1);
 }
 
-.vish-search-compact {
+.grove-search-compact {
   width: 100%;
   display: flex;
   align-items: center;
@@ -807,7 +807,7 @@
   transition: border-color 150ms ease;
 }
 
-.vish-search-compact:focus-within {
+.grove-search-compact:focus-within {
   border-color: rgba(155, 255, 215, 0.28);
 }
 
@@ -861,6 +861,16 @@
   box-shadow:
     0 0 0 1px rgba(155, 255, 215, 0.04),
     0 4px 20px rgba(0, 0, 0, 0.22);
+}
+
+.result-row-selected {
+  background: rgba(20, 38, 27, 0.92);
+  border-top-color: rgba(155, 255, 215, 0.18);
+  border-right-color: rgba(155, 255, 215, 0.18);
+  border-bottom-color: rgba(155, 255, 215, 0.18);
+  box-shadow:
+    0 0 0 1px rgba(155, 255, 215, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
 .result-row:focus-visible {
@@ -926,6 +936,211 @@
   color: rgba(155, 255, 215, 0.95);
 }
 
+.search-results-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 14px;
+  padding: 0 14px 16px;
+}
+
+.preview-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 18, 13, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.preview-pane-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(18, 31, 23, 0.94), rgba(12, 21, 15, 0.88));
+}
+
+.preview-pane-title {
+  margin: 10px 0 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-pane-path {
+  margin: 6px 0 0;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.preview-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.preview-empty-state,
+.preview-loading-state {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.preview-content-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.preview-message-card {
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: var(--text-soft);
+}
+
+.preview-text-block {
+  margin: 0;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(7, 12, 9, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: rgba(228, 245, 233, 0.92);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  line-height: 1.62;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+}
+
+.preview-text-secondary {
+  max-height: 220px;
+}
+
+.preview-footnote {
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.preview-media-stage {
+  min-height: 340px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top, rgba(155, 255, 215, 0.08), transparent 38%),
+    rgba(5, 10, 7, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 62vh;
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+.preview-pdf-frame-wrap {
+  min-height: 420px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.preview-pdf-frame {
+  width: 100%;
+  height: 62vh;
+  border: none;
+  background: white;
+}
+
+.preview-type-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(155, 255, 215, 0.08);
+  border: 1px solid rgba(155, 255, 215, 0.16);
+  color: rgba(155, 255, 215, 0.84);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+}
+
+.preview-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.54);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.preview-pane-overlay {
+  width: min(860px, calc(100vw - 20px));
+  height: calc(100vh - 20px);
+}
+
+.preview-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+@media (max-width: 1099px) {
+  .search-results-layout {
+    display: block;
+    padding: 0 0 16px;
+  }
+}
+
 /* Keep type-badge class for any legacy uses */
 .type-badge {
   display: inline-flex;
@@ -980,7 +1195,7 @@
 }
 
 /* Setup dropzone */
-.vish-dropzone {
+.grove-dropzone {
   border: 1.5px dashed rgba(155, 255, 215, 0.22);
   border-radius: 1.1rem;
   padding: 1.5rem 1rem;
@@ -992,11 +1207,11 @@
     transform 150ms ease;
 }
 
-.vish-dropzone:hover {
+.grove-dropzone:hover {
   border-color: rgba(155, 255, 215, 0.38);
 }
 
-.vish-dropzone-active {
+.grove-dropzone-active {
   border-color: rgba(155, 255, 215, 0.65);
   box-shadow:
     0 0 0 1px rgba(155, 255, 215, 0.12),
@@ -1005,7 +1220,7 @@
 }
 
 /* Folder chips */
-.vish-folder-chip {
+.grove-folder-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -1017,14 +1232,14 @@
 }
 
 /* Progress bar */
-.vish-progress-track {
+.grove-progress-track {
   width: 100%;
   height: 2px;
   background: rgba(255, 255, 255, 0.07);
   overflow: hidden;
 }
 
-.vish-progress-fill {
+.grove-progress-fill {
   height: 100%;
   background: linear-gradient(90deg, rgba(130, 255, 207, 0.88), rgba(181, 255, 229, 0.94));
   box-shadow: 0 0 10px rgba(155, 255, 215, 0.3);
@@ -1033,7 +1248,7 @@
   overflow: hidden;
 }
 
-.vish-progress-fill::after {
+.grove-progress-fill::after {
   content: "";
   position: absolute;
   inset: 0;

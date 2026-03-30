@@ -1,14 +1,14 @@
-interface VishLogoProps {
+interface GroveLogoProps {
   size?: number;
   className?: string;
   glowing?: boolean;
 }
 
-export function VishLogo({
+export function GroveLogo({
   size = 48,
   className = "",
   glowing = false,
-}: VishLogoProps) {
+}: GroveLogoProps) {
   return (
     <div className={`relative inline-flex items-center justify-center ${className}`}>
       {glowing && (

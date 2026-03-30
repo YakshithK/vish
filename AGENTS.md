@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Project Overview
 
-**Vish** is a semantic desktop search application built with **Tauri v2**. It uses Google's Gemini Embedding API to create vector representations of local files, enabling natural language search across documents, images, videos, audio, and PDFs.
+**Grove** is a semantic desktop search application built with **Tauri v2**. It uses Google's Gemini Embedding API to create vector representations of local files, enabling natural language search across documents, images, videos, audio, and PDFs.
 
 ### Architecture
 - **Frontend**: React 19 + Vite + Tailwind CSS + TypeScript (`src/`)
@@ -60,7 +60,7 @@ The CI workflow (`.github/workflows/release.yml`) builds for Linux, Windows, and
 - `indexer/` - File crawling, text extraction, chunking (512 tokens with 64 token overlap)
 
 ### Vector Store
-Vectors are stored in `~/.local/share/vish/vectors/vectors.json`. The store:
+Vectors are stored in `~/.local/share/grove/vectors/vectors.json`. The store:
 - Uses brute-force cosine similarity (no HNSW/index)
 - Filters results below score threshold of 0.35
 - Auto-flushes every 200 points during indexing

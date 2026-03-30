@@ -16,6 +16,8 @@ import { SearchResult } from "../hooks/useSearch";
 interface ResultListProps {
   results: SearchResult[];
   query?: string;
+  selectedPath?: string | null;
+  onSelect?: (result: SearchResult) => void;
 }
 
 interface TypeConfig {
@@ -69,7 +71,7 @@ function getDirPath(path: string): string {
   return dir;
 }
 
-export function ResultList({ results, query }: ResultListProps) {
+export function ResultList({ results, query, selectedPath, onSelect }: ResultListProps) {
   const handleOpen = async (path: string) => {
     try {
       await invoke("open_file", { path });
@@ -155,17 +157,21 @@ export function ResultList({ results, query }: ResultListProps) {
         return (
           <div
             key={`${result.path}-${idx}`}
-            className="result-row"
+            className={`result-row ${selectedPath === result.path ? "result-row-selected" : ""}`}
             style={{
               animationDelay: `${Math.min(idx, 9) * 35}ms`,
               '--row-accent': color,
             } as React.CSSProperties}
-            onClick={() => handleOpen(result.path)}
+            onClick={() => onSelect?.(result)}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") handleOpen(result.path);
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect?.(result);
+              }
             }}
+            aria-pressed={selectedPath === result.path}
           >
             {/* Icon well */}
             <div
